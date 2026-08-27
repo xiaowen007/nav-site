@@ -1,0 +1,17 @@
+# 科技共享导航 - Cloudflare Pages 配置
+# 部署前请先：npx wrangler login
+# 并创建 KV / R2（见 CLOUDFLARE.md），把下方 KV id 替换为你的真实 id。
+
+name = "nav-site"
+pages_build_output_dir = "."
+compatibility_date = "2024-11-01"
+
+# 导航数据 + 配置存储（替代本地 data/sites.json / config.json）
+[[kv_namespaces]]
+binding = "NAV_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# 上传的图标/图片存储（替代本地 uploads/）
+[[r2_buckets]]
+binding = "NAV_R2"
+bucket_name = "nav-site-uploads"

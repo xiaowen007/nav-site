@@ -1,0 +1,707 @@
+// 自动生成：KV 为空时的种子数据（来自 data/sites.json）
+// 由 scripts/gen-seed 生成，请勿手动编辑
+export const SEED = {
+  "site": {
+    "title": "科技共享导航",
+    "subtitle": "智能多功能响应式导航 · 左侧分类 + AI 自动收录",
+    "logo": "🌐",
+    "footer": "© 科技共享导航 · 数据存于 data/sites.json，可自由编辑或由 AI 自动写入",
+    "faviconService": "https://icons.duckduckgo.com/ip3/",
+    "searchPosition": "below",
+    "categoryPosition": "left",
+    "categoryArrangement": "single",
+    "defaultCategory": "all",
+    "rememberCategory": false,
+    "showFavorites": true,
+    "functionIcons": [
+      {
+        "name": "AI 收录",
+        "url": "admin.html",
+        "icon": "🤖",
+        "external": false
+      }
+    ],
+    "cardSize": "medium",
+    "cardColumns": 0,
+    "cardRadius": 14,
+    "cardShadow": true,
+    "showVisits": false,
+    "wallpaperType": "none",
+    "wallpaperValue": "",
+    "wallpaperOpacity": 0.08,
+    "wallpaperBlur": 0
+  },
+  "categories": [
+    {
+      "id": "recommend",
+      "name": "常用推荐",
+      "icon": "⭐",
+      "links": [
+        {
+          "name": "百度",
+          "url": "https://www.baidu.com",
+          "desc": "全球最大中文搜索引擎",
+          "visits": 0
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com",
+          "desc": "全球最大视频分享平台",
+          "visits": 0,
+          "icon": "https://icons.duckduckgo.com/ip3/youtube.com.ico"
+        },
+        {
+          "name": "GitHub",
+          "url": "https://github.com",
+          "desc": "全球最大代码托管与协作平台",
+          "visits": 0
+        },
+        {
+          "name": "微信网页版",
+          "url": "https://wx.qq.com",
+          "desc": "微信网页端入口",
+          "visits": 0
+        },
+        {
+          "name": "B 站",
+          "url": "https://www.bilibili.com",
+          "desc": "国内知名视频弹幕社区",
+          "visits": 0,
+          "icon": "https://icons.duckduckgo.com/ip3/bilibili.com.ico"
+        }
+      ]
+    },
+    {
+      "id": "community",
+      "name": "社区咨询",
+      "icon": "💬",
+      "links": [
+        {
+          "name": "36氪",
+          "url": "https://36kr.com",
+          "desc": "新经济媒体与创投社区",
+          "visits": 0
+        },
+        {
+          "name": "雷锋网",
+          "url": "https://www.leiphone.com",
+          "desc": "人工智能与前沿科技媒体",
+          "visits": 0
+        },
+        {
+          "name": "少数派",
+          "url": "https://sspai.com",
+          "desc": "数字生活指南社区",
+          "visits": 0
+        },
+        {
+          "name": "V2EX",
+          "url": "https://www.v2ex.com",
+          "desc": "创意工作者的社区",
+          "visits": 0
+        },
+        {
+          "name": "知乎",
+          "url": "https://www.zhihu.com",
+          "desc": "中文问答与知识社区",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "discover",
+      "name": "发现产品",
+      "icon": "🚀",
+      "links": [
+        {
+          "name": "Product Hunt",
+          "url": "https://www.producthunt.com",
+          "desc": "每日新鲜产品发现",
+          "visits": 0
+        },
+        {
+          "name": "少数派 Matrix",
+          "url": "https://matrix.sspai.com",
+          "desc": "效率工具与产品社区",
+          "visits": 0
+        },
+        {
+          "name": "最美应用",
+          "url": "https://zuimeia.com",
+          "desc": "精选优质 App 推荐",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "ui-inspiration",
+      "name": "界面灵感",
+      "icon": "🎨",
+      "links": [
+        {
+          "name": "Dribbble",
+          "url": "https://dribbble.com",
+          "desc": "设计师作品社区",
+          "visits": 0
+        },
+        {
+          "name": "Behance",
+          "url": "https://www.behance.net",
+          "desc": "Adobe 创意作品集平台",
+          "visits": 0
+        },
+        {
+          "name": "Awwwards",
+          "url": "https://www.awwwards.com",
+          "desc": "网页设计与开发奖项",
+          "visits": 0
+        },
+        {
+          "name": "站酷",
+          "url": "https://www.zcool.com.cn",
+          "desc": "中文设计师互动平台",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "web-inspiration",
+      "name": "网页灵感",
+      "icon": "🌟",
+      "links": [
+        {
+          "name": "One Page Love",
+          "url": "https://onepagelove.com",
+          "desc": "单页网站灵感",
+          "visits": 0
+        },
+        {
+          "name": "Httpster",
+          "url": "https://httpster.net",
+          "desc": "精美网站画廊",
+          "visits": 0
+        },
+        {
+          "name": "Land-book",
+          "url": "https://land-book.com",
+          "desc": "落地页设计灵感",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "icons",
+      "name": "图标素材",
+      "icon": "🔣",
+      "links": [
+        {
+          "name": "Iconfont",
+          "url": "https://www.iconfont.cn",
+          "desc": "阿里矢量图标库",
+          "visits": 0
+        },
+        {
+          "name": "Flaticon",
+          "url": "https://www.flaticon.com",
+          "desc": "海量扁平图标",
+          "visits": 0
+        },
+        {
+          "name": "Iconfinder",
+          "url": "https://www.iconfinder.com",
+          "desc": "精选图标搜索引擎",
+          "visits": 0
+        },
+        {
+          "name": "Phosphor Icons",
+          "url": "https://phosphoricons.com",
+          "desc": "灵活开源图标集",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "logo",
+      "name": "LOGO设计",
+      "icon": "🏷️",
+      "links": [
+        {
+          "name": "Looka",
+          "url": "https://looka.com",
+          "desc": "AI 生成品牌 Logo",
+          "visits": 0
+        },
+        {
+          "name": "Logaster",
+          "url": "https://www.logaster.com",
+          "desc": "在线 Logo 制作",
+          "visits": 0
+        },
+        {
+          "name": "Canva Logo",
+          "url": "https://www.canva.com/logo-maker/",
+          "desc": "模板化 Logo 设计",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "平面素材",
+      "icon": "🖼️",
+      "links": [
+        {
+          "name": "千图网",
+          "url": "https://www.58pic.com",
+          "desc": "中文平面素材库",
+          "visits": 0
+        },
+        {
+          "name": "包图网",
+          "url": "https://ibaotu.com",
+          "desc": "原创设计素材",
+          "visits": 0
+        },
+        {
+          "name": "Freepik",
+          "url": "https://www.freepik.com",
+          "desc": "全球矢量与图片素材",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "ui-resource",
+      "name": "UI资源",
+      "icon": "🧩",
+      "links": [
+        {
+          "name": "UI8",
+          "url": "https://ui8.net",
+          "desc": "优质 UI  kits 与模板",
+          "visits": 0
+        },
+        {
+          "name": "Craftwork",
+          "url": "https://craftwork.design",
+          "desc": "设计资源合集",
+          "visits": 0
+        },
+        {
+          "name": "1024 资源",
+          "url": "https://www.1024.ca",
+          "desc": "中文 UI 资源导航",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "sketch",
+      "name": "Sketch资源",
+      "icon": "✏️",
+      "links": [
+        {
+          "name": "Sketch App",
+          "url": "https://www.sketch.com",
+          "desc": "矢量界面设计工具",
+          "visits": 0
+        },
+        {
+          "name": "Sketch Rocks",
+          "url": "https://sketchrocks.com",
+          "desc": "Sketch 插件与资源",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "fonts",
+      "name": "字体资源",
+      "icon": "🔤",
+      "links": [
+        {
+          "name": "Google Fonts",
+          "url": "https://fonts.google.com",
+          "desc": "免费开源字体库",
+          "visits": 0
+        },
+        {
+          "name": "字体天下",
+          "url": "https://www.fonts.net.cn",
+          "desc": "中文字体下载",
+          "visits": 0
+        },
+        {
+          "name": "Font Squirrel",
+          "url": "https://www.fontsquirrel.com",
+          "desc": "商用免费字体",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "mockup",
+      "name": "Mockup",
+      "icon": "📱",
+      "links": [
+        {
+          "name": "Smartmockups",
+          "url": "https://smartmockups.com",
+          "desc": "在线样机生成",
+          "visits": 0
+        },
+        {
+          "name": "Mockup World",
+          "url": "https://www.mockupworld.co",
+          "desc": "免费样机素材",
+          "visits": 0
+        },
+        {
+          "name": "Mockuphone",
+          "url": "https://mockuphone.com",
+          "desc": "设备样机生成器",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "photos",
+      "name": "摄影图库",
+      "icon": "📷",
+      "links": [
+        {
+          "name": "Unsplash",
+          "url": "https://unsplash.com",
+          "desc": "高质量免费摄影图",
+          "visits": 0
+        },
+        {
+          "name": "Pexels",
+          "url": "https://www.pexels.com",
+          "desc": "免费图片与视频",
+          "visits": 0
+        },
+        {
+          "name": "Pixabay",
+          "url": "https://pixabay.com",
+          "desc": "无版权图库",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "ppt",
+      "name": "PPT资源",
+      "icon": "📊",
+      "links": [
+        {
+          "name": "OfficePLUS",
+          "url": "https://www.officeplus.cn",
+          "desc": "微软官方模板",
+          "visits": 0
+        },
+        {
+          "name": "优品PPT",
+          "url": "https://www.ypppt.com",
+          "desc": "免费 PPT 模板",
+          "visits": 0
+        },
+        {
+          "name": "SlidesGo",
+          "url": "https://slidesgo.com",
+          "desc": "英文 PPT 模板",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "graphic-creative",
+      "name": "图形创意",
+      "icon": "💡",
+      "links": [
+        {
+          "name": "Canva",
+          "url": "https://www.canva.com",
+          "desc": "在线平面设计工具",
+          "visits": 0
+        },
+        {
+          "name": "Figma",
+          "url": "https://www.figma.com",
+          "desc": "协作式界面设计",
+          "visits": 0
+        },
+        {
+          "name": "稿定设计",
+          "url": "https://www.gaoding.com",
+          "desc": "中文在线设计",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "ui-design",
+      "name": "界面设计",
+      "icon": "🖥️",
+      "links": [
+        {
+          "name": "Figma Community",
+          "url": "https://www.figma.com/community",
+          "desc": "Figma 社区资源",
+          "visits": 0
+        },
+        {
+          "name": "Adobe XD",
+          "url": "https://www.adobe.com/products/xd.html",
+          "desc": "Adobe 体验设计",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "motion",
+      "name": "交互动效",
+      "icon": "✨",
+      "links": [
+        {
+          "name": "Lottie",
+          "url": "https://lottiefiles.com",
+          "desc": "轻量动画资源",
+          "visits": 0
+        },
+        {
+          "name": "Codrops",
+          "url": "https://tympanus.net/codrops/",
+          "desc": "网页动效教程",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "color",
+      "name": "在线配色",
+      "icon": "🌈",
+      "links": [
+        {
+          "name": "Coolors",
+          "url": "https://coolors.co",
+          "desc": "快速配色方案生成",
+          "visits": 0
+        },
+        {
+          "name": "China Colors",
+          "url": "http://zhongguose.com",
+          "desc": "中国传统颜色",
+          "visits": 0
+        },
+        {
+          "name": "Adobe Color",
+          "url": "https://color.adobe.com",
+          "desc": "Adobe 配色工具",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "name": "在线工具",
+      "icon": "🛠️",
+      "links": [
+        {
+          "name": "TinyPNG",
+          "url": "https://tinypng.com",
+          "desc": "在线图片压缩",
+          "visits": 0
+        },
+        {
+          "name": "Remove.bg",
+          "url": "https://www.remove.bg",
+          "desc": "一键去背景",
+          "visits": 0
+        },
+        {
+          "name": "JSON 格式化",
+          "url": "https://jsonformatter.org",
+          "desc": "JSON 在线格式化",
+          "visits": 0
+        },
+        {
+          "name": "ProcessOn",
+          "url": "https://www.processon.com",
+          "desc": "在线流程图",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "chrome",
+      "name": "Chrome插件",
+      "icon": "🧩",
+      "links": [
+        {
+          "name": "Chrome 网上应用店",
+          "url": "https://chrome.google.com/webstore",
+          "desc": "Chrome 扩展商店",
+          "visits": 0
+        },
+        {
+          "name": "Stylus",
+          "url": "https://add0n.com/stylus",
+          "desc": "自定义网页样式",
+          "visits": 0
+        },
+        {
+          "name": "Tampermonkey",
+          "url": "https://www.tampermonkey.net",
+          "desc": "用户脚本管理器",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "spec",
+      "name": "设计规范",
+      "icon": "📐",
+      "links": [
+        {
+          "name": "Material Design",
+          "url": "https://m3.material.io",
+          "desc": "Google 设计体系",
+          "visits": 0
+        },
+        {
+          "name": "Human Interface",
+          "url": "https://developer.apple.com/design/",
+          "desc": "Apple 设计规范",
+          "visits": 0
+        },
+        {
+          "name": "Ant Design",
+          "url": "https://ant.design",
+          "desc": "蚂蚁企业级设计体系",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "video",
+      "name": "视频教程",
+      "icon": "🎬",
+      "links": [
+        {
+          "name": "优设网",
+          "url": "https://www.uisdc.com",
+          "desc": "设计师教程社区",
+          "visits": 0
+        },
+        {
+          "name": "慕课网",
+          "url": "https://www.imooc.com",
+          "desc": "IT 技能学习",
+          "visits": 0
+        },
+        {
+          "name": "B 站教程",
+          "url": "https://www.bilibili.com/v/knowledge",
+          "desc": "视频学习分区",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "articles",
+      "name": "设计文章",
+      "icon": "📝",
+      "links": [
+        {
+          "name": "优设",
+          "url": "https://www.uisdc.com",
+          "desc": "设计文章与资源",
+          "visits": 0
+        },
+        {
+          "name": "Smashing Magazine",
+          "url": "https://www.smashingmagazine.com",
+          "desc": "前端与设计文章",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "radio",
+      "name": "设计电台",
+      "icon": "🎧",
+      "links": [
+        {
+          "name": "设计鸭",
+          "url": "https://www.xiaoyuzhoufm.com",
+          "desc": "设计类播客",
+          "visits": 0
+        },
+        {
+          "name": "Hyperallergic",
+          "url": "https://hyperallergic.com",
+          "desc": "艺术评论媒体",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "name": "交互设计",
+      "icon": "🔄",
+      "links": [
+        {
+          "name": "Nielsen Norman",
+          "url": "https://www.nngroup.com",
+          "desc": "用户体验研究",
+          "visits": 0
+        },
+        {
+          "name": "Interaction Design",
+          "url": "https://www.interaction-design.org",
+          "desc": "交互设计课程",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "ued",
+      "name": "UED团队",
+      "icon": "👥",
+      "links": [
+        {
+          "name": "阿里 UED",
+          "url": "https://ued.alimama.com",
+          "desc": "阿里妈妈 UED",
+          "visits": 0
+        },
+        {
+          "name": "腾讯 CDC",
+          "url": "https://cdc.tencent.com",
+          "desc": "腾讯用户研究与体验中心",
+          "visits": 0
+        }
+      ]
+    },
+    {
+      "id": "friends",
+      "name": "友情链接",
+      "icon": "🔗",
+      "links": [
+        {
+          "name": "科技共享",
+          "url": "https://kjgx.168668520.xyz",
+          "desc": "科技共享导航站",
+          "visits": 0
+        },
+        {
+          "name": "主模板",
+          "url": "https://wwp86.cc.cd",
+          "desc": "本项目参考主模板",
+          "visits": 0
+        }
+      ]
+    }
+  ]
+};

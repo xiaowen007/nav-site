@@ -1,4 +1,4 @@
-共享导航（左侧导航栏 + AI 自动收录版）
+# 科技共享导航（左侧导航栏 + AI 自动收录版）
 
 以 `wwp86.cc.cd`（科技共享·智能多功能响应式导航）为主模板，参考 `kjgx.168668520.xyz` 的
 27 分类结构，加入**左侧分类导航栏**；数据由独立 JSON 驱动，易编辑易管理；并新增
@@ -191,7 +191,10 @@ GitHub 仅托管代码，要让别人通过网址访问需部署到支持 Node.j
   自动读取 `package.json`，部署后获得公网网址。
 - **纯静态托管（GitHub Pages / Vercel Static）**：`index.html` + `data/sites.json` 可直接静态访问，
   但 **AI 自动写入依赖后端**；可在本地用管理面板写好数据，再把 `data/sites.json` 一并上传即可。
+- **Cloudflare Pages（全栈 Serverless，推荐）**：后端已改写为 Pages Functions，数据存 KV、上传存 R2，
+  **后台管理 / AI 识别 / 访问统计在线上全部可用**。完整步骤见 [CLOUDFLARE.md](./CLOUDFLARE.md)。
 
 ---
 
-
+## 许可证
+[MIT](./LICENSE) © 2026 科技共享导航 NavSite
