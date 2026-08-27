@@ -1,4 +1,4 @@
-# 科技共享导航 - Cloudflare Pages 配置
+# 共享导航 - Cloudflare Pages 配置
 # 部署前请先：npx wrangler login
 # 并创建 KV / R2（见 CLOUDFLARE.md），把下方 KV id 替换为你的真实 id。
 

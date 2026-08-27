@@ -1,7 +1,7 @@
 @echo off
-REM 科技共享导航 - Cloudflare 一键部署（在本机、已联网、有 Cloudflare 账号的环境下运行）
+REM 共享导航 - Cloudflare 一键部署（在本机、已联网、有 Cloudflare 账号的环境下运行）
 REM 前置：需先 git push 把最新代码（含 functions/、wrangler.toml）推到 GitHub
-title 科技共享导航 - Cloudflare 部署
+title 共享导航 - Cloudflare 部署
 cd /d %~dp0\..
 
 echo [1/5] 安装 wrangler

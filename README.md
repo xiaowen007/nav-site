@@ -1,4 +1,4 @@
-# 科技共享导航（左侧导航栏 + AI 自动收录版）
+# 共享导航（左侧导航栏 + AI 自动收录版）
 
 以 `wwp86.cc.cd`（科技共享·智能多功能响应式导航）为主模板，参考 `kjgx.168668520.xyz` 的
 27 分类结构，加入**左侧分类导航栏**；数据由独立 JSON 驱动，易编辑易管理；并新增
@@ -44,7 +44,7 @@ node server.js
 
 ```json
 {
-  "site": { "title": "科技共享导航", "subtitle": "...", "logo": "🌐", "footer": "..." },
+  "site": { "title": "共享导航", "subtitle": "...", "logo": "🌐", "footer": "..." },
   "categories": [
     {
       "id": "recommend",
@@ -145,7 +145,7 @@ git init
 git add .
 
 # 4) 首次提交
-git commit -m "初始提交：科技共享导航站（左侧栏 + AI 自动收录）"
+git commit -m "初始提交：共享导航站（左侧栏 + AI 自动收录）"
 
 # 5) 关联远程仓库（把 <用户名>/<仓库名> 换成你自己的）
 git branch -M main
@@ -197,4 +197,4 @@ GitHub 仅托管代码，要让别人通过网址访问需部署到支持 Node.j
 ---
 
 ## 许可证
-[MIT](./LICENSE) © 2026 科技共享导航 NavSite
+[MIT](./LICENSE) © 2026 共享导航 NavSite

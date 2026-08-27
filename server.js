@@ -1,4 +1,4 @@
-/* 科技共享导航 - 零依赖后端
+/* 共享导航 - 零依赖后端
  * 功能：静态文件服务 + AI 自动识别写入（/api/recognize、/api/save）
  * 运行：node server.js   （默认端口 8787，可用 PORT 环境变量覆盖）
  */
@@ -415,7 +415,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log('────────────────────────────────────────');
-  console.log(' 科技共享导航 已启动');
+  console.log(' 共享导航 已启动');
   console.log(' 浏览：  http://localhost:' + PORT);
   console.log(' 管理：  http://localhost:' + PORT + '/admin.html');
   console.log(' AI 识别：' + (AI_ENABLED ? ('已开启（' + CFG.AI_MODEL + '）') : '未开启（使用启发式识别，配置 config.json 的 AI_API_KEY 可启用免费大模型）'));

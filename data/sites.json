@@ -1,9 +1,9 @@
 {
   "site": {
-    "title": "科技共享导航",
+    "title": "共享导航",
     "subtitle": "智能多功能响应式导航 · 左侧分类 + AI 自动收录",
     "logo": "🌐",
-    "footer": "© 科技共享导航 · 数据存于 data/sites.json，可自由编辑或由 AI 自动写入",
+    "footer": "© 共享导航 · 数据存于 data/sites.json，可自由编辑或由 AI 自动写入",
     "faviconService": "https://icons.duckduckgo.com/ip3/",
     "searchPosition": "below",
     "categoryPosition": "left",
@@ -45,7 +45,7 @@
           "name": "YouTube",
           "url": "https://www.youtube.com",
           "desc": "全球最大视频分享平台",
-          "visits": 0,
+          "visits": 1,
           "icon": "https://icons.duckduckgo.com/ip3/youtube.com.ico"
         },
         {
@@ -690,7 +690,7 @@
         {
           "name": "科技共享",
           "url": "https://kjgx.168668520.xyz",
-          "desc": "科技共享导航站",
+          "desc": "共享导航站",
           "visits": 0
         },
         {

@@ -2,10 +2,10 @@
 // 由 scripts/gen-seed 生成，请勿手动编辑
 export const SEED = {
   "site": {
-    "title": "科技共享导航",
+    "title": "共享导航",
     "subtitle": "智能多功能响应式导航 · 左侧分类 + AI 自动收录",
     "logo": "🌐",
-    "footer": "© 科技共享导航 · 数据存于 data/sites.json，可自由编辑或由 AI 自动写入",
+    "footer": "© 共享导航 · 数据存于 data/sites.json，可自由编辑或由 AI 自动写入",
     "faviconService": "https://icons.duckduckgo.com/ip3/",
     "searchPosition": "below",
     "categoryPosition": "left",
@@ -692,7 +692,7 @@ export const SEED = {
         {
           "name": "科技共享",
           "url": "https://kjgx.168668520.xyz",
-          "desc": "科技共享导航站",
+          "desc": "共享导航站",
           "visits": 0
         },
         {

@@ -1,7 +1,7 @@
 {
   "name": "nav-site",
   "version": "1.0.0",
-  "description": "科技共享导航：带左侧分类导航栏 + AI 自动收录的网址导航站，零依赖 Node 后端，数据由 JSON 驱动，易编辑易管理。",
+  "description": "共享导航：带左侧分类导航栏 + AI 自动收录的网址导航站，零依赖 Node 后端，数据由 JSON 驱动，易编辑易管理。",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,4 +1,4 @@
-// 科技共享导航 - Cloudflare Pages Functions 共享库
+// 共享导航 - Cloudflare Pages Functions 共享库
 // 注意：本文件以 "_" 开头，不会被当作路由，仅供各 API 函数 import。
 // 运行在 Workers 运行时（V8），仅使用 Web 标准 API，不依赖 Node 内置模块。
 
