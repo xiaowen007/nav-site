@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后台管理 · 科技共享导航</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .admin { max-width: 1100px; margin: 0 auto; padding: 22px 20px 70px; }
+    .admin h1 { font-size: 22px; margin: 0 0 4px; }
+    .admin .back { float: right; color: var(--primary); font-size: 13px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 18px; margin-bottom: 18px; }
+    .panel h2 { font-size: 15px; margin: 0 0 14px; display:flex; align-items:center; gap:8px; }
+    textarea, input[type=text], input[type=url], select {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px;
+      font-size: 13px; outline: none; background: var(--bg); font-family: inherit;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--primary); background: #fff; }
+    .btn { display:inline-block; padding: 8px 15px; border:none; border-radius: 20px;
+      background: var(--primary); color:#fff; font-weight:600; font-size:13px; cursor:pointer; transition: opacity .15s; }
+    .btn:hover { opacity:.9; }
+    .btn.ghost { background: var(--bg); color: var(--text); border:1px solid var(--border); }
+    .btn.sm { padding: 5px 10px; font-size:12px; border-radius:14px; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .hint { font-size:12px; color: var(--muted); }
+    .status { margin-top:10px; font-size:13px; }
+    .status.ok { color:#1aa179; } .status.err { color:#e8543f; }
+    .ai-status { font-size:12px; padding:3px 10px; border-radius:12px; }
+    .ai-on { background:#e7f7ee; color:#1aa179; } .ai-off { background:#fdeceb; color:#e8543f; }
+
+    /* 管理控制台 */
+    .console { display:grid; grid-template-columns: 220px 1fr; gap:16px; }
+    .cat-pane { border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--bg); align-self:start; }
+    .cat-pane .cp-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .cat-list { display:flex; flex-direction:column; gap:4px; max-height:460px; overflow:auto; }
+    .cat-item { display:flex; align-items:center; gap:6px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13px; }
+    .cat-item:hover { background:#fff; }
+    .cat-item.active { background: var(--primary-soft); color: var(--primary); font-weight:600; }
+    .cat-item .cname { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cat-item .cact { display:none; gap:4px; }
+    .cat-item:hover .cact { display:flex; }
+    .cat-item .mini { border:none; background:transparent; cursor:pointer; font-size:12px; padding:0 2px; color:var(--muted); }
+    .link-pane { border:1px solid var(--border); border-radius:12px; padding:12px; }
+    .link-tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    table.grid { width:100%; border-collapse:collapse; font-size:13px; }
+    table.grid th { text-align:left; color:var(--muted); font-weight:600; font-size:12px; padding:6px 8px; border-bottom:1px solid var(--border); }
+    table.grid td { padding:5px 6px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    table.grid input { padding:6px 8px; }
+    .row-actions { display:flex; gap:4px; white-space:nowrap; }
+    .thumb-sm { width:22px; height:22px; border-radius:6px; object-fit:contain; background:var(--bg); vertical-align:middle; }
+    .saved-dot { font-size:12px; color:#1aa179; }
+
+    @media (max-width: 760px) {
+      .console { grid-template-columns:1fr; }
+      table.grid .col-desc, table.grid .col-icon { display:none; }
+    }
+
+    /* ===== 系统设置模态框 ===== */
+    .settings-mask { align-items: flex-start; padding-top: 4vh; }
+    .settings-modal {
+      width: 640px; max-width: 96vw; max-height: 92vh; padding: 0;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .settings-header h3 { margin: 0; font-size: 16px; display:flex; align-items:center; gap:6px; }
+    .close-x {
+      border: none; background: transparent; font-size: 18px; cursor: pointer;
+      color: var(--muted); padding: 4px 8px; border-radius: 6px;
+    }
+    .close-x:hover { background: var(--bg); color: var(--text); }
+    .settings-tabs {
+      display: flex; gap: 4px; padding: 8px 12px 0; border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .settings-tab {
+      border: none; background: transparent; padding: 10px 14px;
+      cursor: pointer; font-size: 13px; color: var(--muted);
+      border-radius: 10px 10px 0 0; border-bottom: 2px solid transparent;
+      transition: color .12s, border-color .12s;
+    }
+    .settings-tab:hover { color: var(--text); }
+    .settings-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; background: var(--panel); }
+    .settings-body { flex: 1; overflow-y: auto; padding: 18px 20px; }
+    .settings-panel { display: none; }
+    .settings-panel.active { display: block; }
+    .settings-section {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 14px;
+    }
+    .settings-section h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+    .settings-section label.hint { display: block; margin: 8px 0 4px; }
+    .settings-section input[type=text], .settings-section textarea, .settings-section select {
+      margin-bottom: 4px;
+    }
+    .settings-section textarea { min-height: 60px; resize: vertical; }
+    .settings-row {
+      display: flex; align-items: center; gap: 12px; padding: 8px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row .srl { width: 160px; flex-shrink: 0; font-size: 13px; color: var(--text); }
+    .settings-row input[type=range] { flex: 1; max-width: 260px; }
+    .settings-row input[type=number] { padding: 5px 8px; }
+    .settings-hint {
+      margin: 10px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6;
+    }
+    .settings-hint code { background: var(--panel); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+    /* 分段按钮组 */
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); }
+    .seg-btn {
+      border: none; background: transparent; padding: 6px 14px;
+      font-size: 12px; cursor: pointer; color: var(--text); white-space: nowrap;
+      border-right: 1px solid var(--border); transition: background .12s, color .12s;
+    }
+    .seg-btn:last-child { border-right: none; }
+    .seg-btn:hover { background: var(--bg); }
+    .seg-btn.on { background: var(--primary); color: #fff; }
+
+    /* 开关 */
+    .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background-color: var(--border); border-radius: 22px; transition: .2s;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 16px; width: 16px;
+      left: 3px; top: 3px; background-color: #fff; border-radius: 50%; transition: .2s;
+    }
+    .switch input:checked + .slider { background-color: var(--primary); }
+    .switch input:checked + .slider:before { transform: translateX(18px); }
+
+    /* 功能图标列表 */
+    .func-icons-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .func-icon-row {
+      display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    }
+    .func-icon-row input { padding: 4px 6px; font-size: 12px; }
+    .func-icon-row .fi-name { flex: 1; }
+    .func-icon-row .fi-url { flex: 2; }
+    .func-icon-row .fi-icon { width: 64px; }
+    .func-icon-row .fi-del {
+      border: none; background: transparent; color: var(--muted);
+      cursor: pointer; font-size: 14px; padding: 2px 6px;
+    }
+    .func-icon-row .fi-del:hover { color: #e8543f; }
+
+    .settings-footer {
+      display: flex; gap: 10px; justify-content: flex-end;
+      padding: 14px 20px; border-top: 1px solid var(--border); background: var(--bg);
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span>🛠️</span><span>后台管理</span></div>
+    <div style="flex:1"></div>
+    <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
+    <button class="admin-link ghost" id="openSettings" title="系统设置" style="background:var(--bg);color:var(--text);border:1px solid var(--border);">⚙ 设置</button>
+    <a class="admin-link" href="index.html">← 返回导航</a>
+  </header>
+
+  <!-- 登录遮罩 -->
+  <div class="login-mask" id="loginMask" style="display:none">
+    <div class="login-box">
+      <h3>后台登录</h3>
+      <p>该导航站已启用管理密码</p>
+      <input type="password" id="loginPwd" placeholder="请输入管理密码" />
+      <button class="btn" id="loginBtn" style="width:100%">登录</button>
+      <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <div class="admin">
+    <a class="back" href="index.html">返回首页</a>
+    <h1>导航站后台管理</h1>
+    <p class="hint">在此可视化管理全部分类与链接：新增 / 编辑 / 删除 / 排序，改完点「保存更改」整体写入 <code>data/sites.json</code>。也支持 AI 自动收录与配置。</p>
+
+    <!-- ① 数据管理控制台 -->
+    <div class="panel">
+      <h2>① 导航数据管理 <span id="savedDot" class="saved-dot"></span></h2>
+      <div class="console">
+        <div class="cat-pane">
+          <div class="cp-head">
+            <strong class="hint">分类</strong>
+            <button class="btn sm ghost" id="addCat">＋分类</button>
+          </div>
+          <div class="cat-list" id="catList"></div>
+        </div>
+        <div class="link-pane">
+          <div class="link-tools">
+            <strong id="curCatName" class="hint">—</strong>
+            <span class="hint" id="statHint"></span>
+            <div style="flex:1"></div>
+            <input type="text" id="linkSearch" placeholder="🔍 过滤…" style="max-width:160px" />
+            <button class="btn sm ghost" id="sortVisits" title="按访问量降序排列当前分类">↧ 访问排序</button>
+            <button class="btn sm ghost" id="addLink">＋ 链接</button>
+            <label class="btn sm ghost" for="importFile" style="cursor:pointer">⬆ 导入</label>
+            <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
+            <a class="btn sm ghost" id="exportBtn" href="/api/sites" download="sites.json">⬇ 导出</a>
+            <button class="btn sm" id="saveAll">💾 保存</button>
+          </div>
+          <table class="grid">
+            <thead>
+              <tr>
+                <th style="width:130px">名称</th>
+                <th style="width:190px">网址</th>
+                <th class="col-desc">简介</th>
+                <th class="col-icon" style="width:160px">图标</th>
+                <th style="width:64px">访问</th>
+                <th style="width:110px">操作</th>
+              </tr>
+            </thead>
+            <tbody id="linkBody"></tbody>
+          </table>
+          <div class="status" id="consoleStatus"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② AI 自动收录 -->
+    <div class="panel">
+      <h2>② AI 自动识别写入</h2>
+      <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <button class="btn" id="recognizeBtn">识别并预览</button>
+        <textarea id="urlInput" style="flex:3; min-width:260px" placeholder="粘贴网址，每行一个：&#10;https://example.com"></textarea>
+        <button class="btn ghost" id="clearBtn">清空</button>
+      </div>
+      <div id="resultPanel" style="display:none; margin-top:12px">
+        <div id="resultList"></div>
+        <div style="margin-top:10px"><button class="btn" id="writeBtn">写入选中项到导航</button></div>
+        <div class="status" id="status"></div>
+      </div>
+      <p class="hint" style="margin-top:8px">需先到下方「③ 配置」填入免费大模型 Key；未填则使用启发式识别。</p>
+    </div>
+
+    <!-- ③ 配置 -->
+    <div class="panel">
+      <h2>③ 免费大模型配置 <span id="aiStatus" class="ai-status ai-off">未开启</span></h2>
+      <div class="row" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="flex:2; min-width:220px">
+          <label class="hint">API 地址（OpenAI 兼容）</label>
+          <input type="text" id="cfgBase" placeholder="https://api.siliconflow.cn/v1" />
+        </div>
+        <div style="flex:1; min-width:180px">
+          <label class="hint">模型名</label>
+          <input type="text" id="cfgModel" placeholder="Qwen/Qwen2.5-7B-Instruct" />
+        </div>
+        <div style="flex:2; min-width:220px">
+          <label class="hint">API Key（留空=启发式）</label>
+          <input type="text" id="cfgKey" placeholder="sk-...（硅基流动/DeepSeek/OpenRouter 等免费获取）" />
+        </div>
+      </div>
+        <div style="margin-top:10px"><button class="btn" id="saveCfg">保存配置</button>
+        <button class="btn ghost" id="clearPwd" style="margin-left:8px">清除密码保护</button>
+        <span class="hint"> 保存即时生效并写入 config.json</span></div>
+        <div style="margin-top:12px">
+          <label class="hint">后台管理密码（留空=不保护；设置后写操作需密码）</label>
+          <input type="text" id="cfgPwd" placeholder="设置管理密码，或留空关闭保护" />
+        </div>
+    </div>
+  </div>
+
+  <!-- 分类编辑模态框（支持 emoji + 图片上传） -->
+  <div class="modal-mask" id="catModal" style="display:none">
+    <div class="modal">
+      <h3 id="catModalTitle">新增分类</h3>
+      <label class="hint">分类名称</label>
+      <input type="text" id="catNameInput" placeholder="如：设计灵感" />
+      <label class="hint" style="display:block;margin-top:10px">图标（emoji，可留空）</label>
+      <input type="text" id="catIconInput" placeholder="🆕" />
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+        <label class="btn sm ghost" id="catIconUpload" style="cursor:pointer">⬆ 上传图标</label>
+        <input type="file" id="catIconFile" accept="image/*" style="display:none" />
+        <img id="catIconPrev" class="thumb-sm" style="display:none" />
+        <span class="hint" id="catIconUrl" style="word-break:break-all"></span>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn sm ghost" id="catCancel">取消</button>
+        <button class="btn sm" id="catSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 系统设置模态框（4 个 Tab：首页 / 卡片 / 壁纸 / AI） -->
+  <div class="modal-mask settings-mask" id="settingsModal" style="display:none">
+    <div class="modal settings-modal">
+      <div class="settings-header">
+        <h3>⚙ 系统设置</h3>
+        <button class="close-x" id="settingsClose" title="关闭">✕</button>
+      </div>
+      <div class="settings-tabs" id="settingsTabs">
+        <button class="settings-tab active" data-tab="home">首页设置</button>
+        <button class="settings-tab" data-tab="card">卡片设置</button>
+        <button class="settings-tab" data-tab="wallpaper">壁纸设置</button>
+        <button class="settings-tab" data-tab="ai">AI 设置</button>
+      </div>
+      <div class="settings-body">
+
+        <!-- 首页设置 -->
+        <div class="settings-panel active" data-panel="home">
+          <div class="settings-section">
+            <h4>站点信息</h4>
+            <label class="hint">站点名称（优先于环境变量）</label>
+            <input type="text" id="setTitle" placeholder="请输入站点名称" />
+            <label class="hint">站点描述（优先于环境变量）</label>
+            <textarea id="setSubtitle" placeholder="请输入站点描述…"></textarea>
+            <label class="hint">页脚描述（优先于环境变量）</label>
+            <input type="text" id="setFooter" placeholder="页脚说明" />
+          </div>
+          <div class="settings-section">
+            <h4>分类设置</h4>
+            <div class="settings-row">
+              <span class="srl">搜索框位置</span>
+              <div class="seg">
+                <button class="seg-btn" data-key="searchPosition" data-val="below">搜索框下方</button>
+                <button class="seg-btn" data-key="searchPosition" data-val="above">搜索框上方</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <span class="srl">分类位置</span>
+              <div class="seg">
+                <button class="seg-btn" data-key="categoryPosition" data-val="left">左侧</button>
+                <button class="seg-btn" data-key="categoryPosition" data-val="top">顶部</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <span class="srl">分类排列</span>
+              <div class="seg">
+                <button class="seg-btn" data-key="categoryArrangement" data-val="single">单行</button>
+                <button class="seg-btn" data-key="categoryArrangement" data-val="multi">多行</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <span class="srl">默认分类</span>
+              <select id="setDefaultCategory"><option value="all">默认 [全部]</option></select>
+            </div>
+            <div class="settings-row">
+              <span class="srl">记住分类</span>
+              <label class="switch"><input type="checkbox" id="setRememberCategory"><span class="slider"></span></label>
+            </div>
+            <div class="settings-row">
+              <span class="srl">常用收藏</span>
+              <label class="switch"><input type="checkbox" id="setShowFavorites"><span class="slider"></span></label>
+            </div>
+            <p class="settings-hint">左侧会启用侧边栏；顶部会把分类放在站点标题上方；单行会把溢出的分类收进更多按钮，多行会直接换行展示；移动端固定使用纵向分类。</p>
+          </div>
+          <div class="settings-section">
+            <h4>功能图标 <span class="hint">（显示在顶栏右侧的快捷入口）</span></h4>
+            <div id="setFuncIcons" class="func-icons-list"></div>
+            <button class="btn sm ghost" id="addFuncIcon">＋ 添加功能图标</button>
+          </div>
+        </div>
+
+        <!-- 卡片设置 -->
+        <div class="settings-panel" data-panel="card">
+          <div class="settings-section">
+            <h4>卡片外观</h4>
+            <div class="settings-row">
+              <span class="srl">卡片大小</span>
+              <div class="seg">
+                <button class="seg-btn" data-key="cardSize" data-val="small">紧凑</button>
+                <button class="seg-btn" data-key="cardSize" data-val="medium">标准</button>
+                <button class="seg-btn" data-key="cardSize" data-val="large">宽松</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <span class="srl">列数（0=自动）</span>
+              <input type="number" id="setCardColumns" min="0" max="10" style="width:90px" />
+            </div>
+            <div class="settings-row">
+              <span class="srl">卡片圆角</span>
+              <input type="range" id="setCardRadius" min="0" max="28" />
+              <span id="setCardRadiusVal" class="hint" style="min-width:32px;text-align:right">14</span>
+            </div>
+            <div class="settings-row">
+              <span class="srl">显示阴影</span>
+              <label class="switch"><input type="checkbox" id="setCardShadow"><span class="slider"></span></label>
+            </div>
+            <div class="settings-row">
+              <span class="srl">显示访问量（卡片右下角）</span>
+              <label class="switch"><input type="checkbox" id="setShowVisits"><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 壁纸设置 -->
+        <div class="settings-panel" data-panel="wallpaper">
+          <div class="settings-section">
+            <h4>背景壁纸</h4>
+            <div class="settings-row">
+              <span class="srl">类型</span>
+              <div class="seg">
+                <button class="seg-btn" data-key="wallpaperType" data-val="none">无</button>
+                <button class="seg-btn" data-key="wallpaperType" data-val="image">图片</button>
+                <button class="seg-btn" data-key="wallpaperType" data-val="gradient">渐变</button>
+                <button class="seg-btn" data-key="wallpaperType" data-val="color">纯色</button>
+              </div>
+            </div>
+            <label class="hint">值（图片 URL / 渐变 CSS / 颜色值）</label>
+            <input type="text" id="setWallpaperValue" placeholder="例如 https://…  或  linear-gradient(120deg,#2f6fed,#1aa179)  或  #f5f7fa" />
+            <div class="settings-row">
+              <span class="srl">遮罩透明度</span>
+              <input type="range" id="setWallpaperOpacity" min="0" max="1" step="0.05" />
+              <span id="setWallpaperOpacityVal" class="hint" style="min-width:42px;text-align:right">0.08</span>
+            </div>
+            <div class="settings-row">
+              <span class="srl">模糊（px）</span>
+              <input type="range" id="setWallpaperBlur" min="0" max="20" />
+              <span id="setWallpaperBlurVal" class="hint" style="min-width:32px;text-align:right">0</span>
+            </div>
+            <p class="settings-hint">提示：可在 admin.html 顶栏「上传图标」区域上传壁纸图片，把返回的 <code>/uploads/…</code> 粘到这里即可使用本地图片。</p>
+          </div>
+        </div>
+
+        <!-- AI 设置（复用原有 ③ 配置内容） -->
+        <div class="settings-panel" data-panel="ai">
+          <div class="settings-section">
+            <h4>免费大模型配置</h4>
+            <label class="hint">API 地址（OpenAI 兼容）</label>
+            <input type="text" id="setCfgBase" placeholder="https://api.siliconflow.cn/v1" />
+            <label class="hint">模型名</label>
+            <input type="text" id="setCfgModel" placeholder="Qwen/Qwen2.5-7B-Instruct" />
+            <label class="hint">API Key（留空=启发式识别）</label>
+            <input type="text" id="setCfgKey" placeholder="sk-…（硅基流动 / DeepSeek / OpenRouter 等免费获取）" />
+            <label class="hint" style="margin-top:10px">后台管理密码（留空=不保护）</label>
+            <input type="text" id="setCfgPwd" placeholder="设置管理密码，或留空关闭保护" />
+            <div style="margin-top:12px"><button class="btn" id="setSaveCfg">保存配置</button>
+            <button class="btn ghost" id="setClearPwd" style="margin-left:8px">清除密码保护</button>
+            <span id="setCfgStatus" class="hint"></span></div>
+          </div>
+        </div>
+
+      </div>
+      <div class="settings-footer">
+        <button class="btn ghost" id="settingsCancel">取消</button>
+        <button class="btn" id="settingsSave">💾 保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

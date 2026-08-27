@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>科技共享导航</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="切换导航">☰</button>
+    <div class="brand"><span id="siteLogo">🌐</span><span id="siteTitle">科技共享导航</span></div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="搜索站点 / 分类…" autocomplete="off" />
+      <span class="search-clear" id="searchClear" title="清除">✕</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
+    <a class="admin-link" href="admin.html" title="AI 自动收录 / 管理">＋ AI 收录</a>
+  </header>
+
+  <div class="layout">
+    <!-- 左侧导航栏 -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="side-nav" id="sideNav">
+        <a class="side-item fav-entry" data-target="__fav" href="#__fav">⭐ 常用收藏 <span class="fav-count" id="favCount">0</span></a>
+        <a class="side-item active" data-target="all" href="#all">🏠 全部</a>
+        <!-- 分类由 JS 注入 -->
+      </nav>
+      <div class="side-foot" id="sideFoot"></div>
+    </aside>
+    <div class="sidebar-mask" id="sidebarMask"></div>
+
+    <!-- 主内容区 -->
+    <main class="content" id="content">
+      <section class="hero" id="hero">
+        <h1 id="heroTitle">科技共享导航</h1>
+        <p id="heroSub">智能多功能响应式导航</p>
+      </section>
+      <div id="sections"><!-- 分类区块由 JS 注入 --></div>
+      <footer class="footer" id="footer"></footer>
+    </main>
+  </div>
+
+  <script>
+    /* 主题初始化：localStorage 优先，否则跟随系统 */
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <script src="js/app.js"></script>
+</body>
+</html>

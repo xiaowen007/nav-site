@@ -1,0 +1,28 @@
+{
+  "name": "nav-site",
+  "version": "1.0.0",
+  "description": "科技共享导航：带左侧分类导航栏 + AI 自动收录的网址导航站，零依赖 Node 后端，数据由 JSON 驱动，易编辑易管理。",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "keywords": [
+    "navigation",
+    "bookmarks",
+    "dashboard",
+    "startpage",
+    "ai",
+    "nodejs",
+    "static"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<你的用户名>/<仓库名>.git"
+  },
+  "private": false
+}
