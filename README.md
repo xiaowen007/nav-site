@@ -193,6 +193,7 @@ GitHub 仅托管代码，要让别人通过网址访问需部署到支持 Node.j
   但 **AI 自动写入依赖后端**；可在本地用管理面板写好数据，再把 `data/sites.json` 一并上传即可。
 - **Cloudflare Pages（全栈 Serverless，推荐）**：后端已改写为 Pages Functions，数据存 KV、上传存 R2，
   **后台管理 / AI 识别 / 访问统计在线上全部可用**。完整步骤见 [CLOUDFLARE.md](./CLOUDFLARE.md)。
+  - ⚠️ 部署后请**先在 Cloudflare 后台绑定 `NAV_KV`**，再到 `/admin.html` **设置后台管理员密码**（详见 [CLOUDFLARE.md](./CLOUDFLARE.md)「设置后台管理员密码」），否则后台为只读开放、密码保护不生效。
 
 ---
 
