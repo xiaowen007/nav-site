@@ -191,6 +191,8 @@
       resolveLogin(true);
     } catch (e) {
       err.textContent = e.message;
+      // 初始化/登录时若后端返回「存储未绑定 NAV_KV」，顶部同步显示警示横幅
+      if (e.message && (e.message.includes('NAV_KV') || e.message.includes('存储未绑定'))) toggleKvWarn(true);
     } finally {
       btn.disabled = false;
       $('#loginBtn').textContent = authMode === 'setup' ? '创建并登录' : '登 录';
@@ -262,6 +264,7 @@
       c.links.forEach((l) => { if (l.visits == null) l.visits = 0; });
     });
     state.data = d;
+    toggleKvWarn(!!d.readOnly); // KV 未绑定（部署后尚未手动绑定）时顶部显示警示横幅
     if (!state.activeCatId || !d.categories.find((c) => c.id === state.activeCatId)) {
       state.activeCatId = d.categories[0] ? d.categories[0].id : null;
     }
@@ -635,6 +638,14 @@
     if (sb) sb.classList.toggle('dirty', state.dirty); // 有未保存改动时保存按钮呼吸提示
   }
 
+  // KV 未绑定（部署后尚未手动绑定）时显示顶部警示横幅
+  // 登录遮罩内与后台页顶部各有一份，同 class 统一显隐
+  function toggleKvWarn(show) {
+    document.querySelectorAll('.kv-warn').forEach((el) => {
+      el.style.display = show ? 'flex' : 'none';
+    });
+  }
+
   /* ---------- 面板折叠 ---------- */
   const COLLAPSE_KEY = 'nav_admin_collapsed';
   function getCollapsed() {
@@ -659,6 +670,11 @@
   }
 
   async function saveAll() {
+    if (state.data && state.data.readOnly) {
+      $('#consoleStatus').textContent = '存储未绑定 NAV_KV，无法保存：请到 Cloudflare 后台 Workers & Pages → nav-site → Settings → Functions 绑定 KV（变量名 NAV_KV）后重试。';
+      $('#consoleStatus').className = 'status err';
+      return;
+    }
     const btn = $('#saveAll'); btn.disabled = true;
     try {
       const r = await api('/api/sites', 'POST', state.data);
