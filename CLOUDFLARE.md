@@ -17,33 +17,37 @@ npx wrangler login
 ```bash
 # 1) KV 命名空间（保存导航数据 + 配置）
 npx wrangler kv namespace create NAV_KV
-#   输出形如：{ "kv_namespaces": [ { "binding": "NAV_KV", "id": "abcd1234..." } ] }
-#   把 id 复制到 wrangler.toml 的 NAV_KV.id
+#   记下命名空间名称，稍后在后台绑定时选择它
 
 # 2) R2 存储桶（保存上传的图标/图片）
 npx wrangler r2 bucket create nav-site-uploads
 ```
 
-> 绑定名必须分别是 `NAV_KV` 和 `NAV_R2`（代码里写死了）。桶名 `nav-site-uploads` 可改，但需同步改 wrangler.toml。
+> 绑定名必须分别是 `NAV_KV` 和 `NAV_R2`（代码里写死了）。桶名 `nav-site-uploads` 可改，但需同步改后台绑定。
 
-### ⚠️ 重要：绑定由 `wrangler.toml` 管理，不在后台添加
+### ✅ 绑定在哪管理：Cloudflare 后台（可随时增删改）
 
-本项目的 `wrangler.toml` 已包含 `pages_build_output_dir`，因此 Cloudflare Pages **以 wrangler.toml 为配置的唯一来源**（含绑定）。你会看到：
+本项目**选择在 Cloudflare 后台管理 KV / R2 绑定**，因此仓库里的 `wrangler.toml` **故意不写** `pages_build_output_dir`。
 
-> Bindings for this project are being managed through wrangler.toml.
+官方规则（Pages Functions → Wrangler configuration）：
 
-这意味着：
+| `wrangler.toml` 是否含 `pages_build_output_dir` | 生产配置来源 | 后台绑定界面 |
+| --- | --- | --- |
+| **含** | 以 wrangler.toml 为唯一来源 | 被禁用，提示 "managed through wrangler.toml" |
+| **不含**（本项目） | 以 Cloudflare 后台为准 | ✅ 可正常增删改 |
 
-- **这是正常提示，不是错误**。后台的 KV / R2 绑定界面会被禁用，**不允许也无法**在那里添加绑定。
-- 绑定必须（且已经）写在 `wrangler.toml` 的 `[[kv_namespaces]]` / `[[r2_buckets]]` 里。
-- **KV 命名空间与 R2 桶本身必须先存在**（上面两条命令创建）。若 `wrangler.toml` 引用了账号里不存在的 KV id 或 R2 桶名，**部署会失败**。
-- 绑定在**部署时**写入运行环境 → 改动 `wrangler.toml` 后**必须重新部署**才生效，刷新页面不会生效。
+所以在你的后台里，Settings → Functions 的 KV / R2 绑定是**可以直接编辑的**，无需改代码、无需动 `wrangler.toml`。
 
-前提条件（必须同时满足，否则 wrangler.toml 会被当作"仅供本地开发"而忽略）：
+> `wrangler.toml` 里保留的 `[[kv_namespaces]]` / `[[r2_buckets]]` 仅用于**本地开发**（`wrangler pages dev`），
+> 不会影响线上。
 
-- 使用 **V2 构建系统**（部署日志出现 `Using v2 root directory strategy` 即满足）
-- Pages 使用的 Wrangler ≥ **3.45.0**（日志里有 `⛅️ wrangler 3.x`，本仓库已满足）
-- **必须存在 `pages_build_output_dir`** 字段（本仓库已填 `.`）
+⚠️ 两个必须知道的点：
+
+- **绑定改动后必须重新部署才生效**：在后台添加/修改绑定后，需 Deployments → **Redeploy**（或 git push 触发）。
+- **`Build output directory` 必须在后台设置**：因为不再由 wrangler.toml 提供，需到
+  Settings → Builds & deployments 确认 **Build output directory = `.`**（点号），否则部署后站点无内容。
+
+> 若你更想用 `wrangler.toml` 管理绑定，把 `pages_build_output_dir = "."` 加回该文件即可（后台界面会随之禁用）。
 
 ## 三、部署（两种方式选其一）
 
@@ -54,22 +58,28 @@ npm install        # 安装 wrangler（devDependency）
 npm run deploy     # = npx wrangler pages deploy .
 ```
 
-按提示创建 Pages 项目即可。KV/R2 绑定取自 `wrangler.toml`。
+按提示创建 Pages 项目即可。
+
+> 命令行部署（Direct Upload）会读取 `wrangler.toml` 里的绑定用于本地/直传；
+> 但**正式站点的绑定以 Cloudflare 后台为准**（见方式 B 第 4–5 步）。
+> 由于本仓库不含 `pages_build_output_dir`，`wrangler pages deploy` 会提示字段缺失并仅将其用于本地开发，属正常。
 
 ### 方式 B：连接 GitHub 自动部署（推荐长期）
 
 1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → 连接 Git 仓库 `xiaowen007/nav-site`。
 2. 构建设置：**Build command** 留空，**Build output directory** 填 `.`（点号，表示根目录）。
-3. 先按「二、创建存储」建好 KV 命名空间和 R2 桶，并把 KV id 填进 `wrangler.toml`。
-4. 直接部署。**绑定随 `wrangler.toml` 一起生效，不需要（也不能）在后台添加**。
-5. 想修改绑定 → 改 `wrangler.toml` 的 `id` / `bucket_name` → 提交推送 → **自动触发重新部署后生效**。
+3. 先按「二、创建存储」建好 KV 命名空间和 R2 桶。
+4. 直接部署（**无需预先绑定 KV/R2**）。此时网站以**只读种子数据**正常打开，写操作返回 503，属预期。
+5. 部署后在**后台添加绑定**：
+   - **Settings → Functions → KV namespace bindings → Add**
+     变量名 `NAV_KV` → 选择你建的 KV 命名空间
+   - **Settings → Functions → R2 buckets bindings → Add**
+     变量名 `NAV_R2` → 选择 `nav-site-uploads`
+6. **Redeploy 一次**：绑定改动需重新部署才生效（Deployments → 三个点 → Retry deployment，或 Redeploy）。
+   部署完成后刷新 `/admin.html`，顶部红色横幅消失，即可正常保存。
 
-> ✅ Git 连接方式下，绑定**同样从 `wrangler.toml` 读取**，无需在 Dashboard 手动添加。
-> 只有**没有** `wrangler.toml`（或其中没有 `pages_build_output_dir`）的项目，才需要在 Dashboard 的
-> Settings → Functions 里手动添加绑定——那种情况下后台不会显示"managed through wrangler.toml"提示。
->
-> 若 `wrangler.toml` 里的 KV id / 桶名在账号中不存在，部署会报错失败；
-> 若引用正确但代码读到未绑定，写操作会返回 `503` 并提示「存储未绑定：NAV_KV / NAV_R2」。
+> 绑定可在后台随时修改（换命名空间、换桶、改名），**改完记得重新部署**。
+> 未绑定时：首页正常浏览（只读种子数据），写操作返回 `503`「存储未绑定：NAV_KV / NAV_R2」，属预期行为。
 
 ## 四、首次访问与数据
 
@@ -98,9 +108,9 @@ npm run deploy     # = npx wrangler pages deploy .
 
 ### 常见坑
 - 报 `503 存储未绑定 NAV_KV` → 说明 `env.NAV_KV` 为空。按下面排查：
-  1. 确认 `wrangler.toml` 里 `[[kv_namespaces]] binding = "NAV_KV"` 的 `id` 与 Cloudflare 后台 KV 列表里的**命名空间 id 完全一致**；
-  2. 确认该 KV 命名空间确实在**同一个 Cloudflare 账号**下；
-  3. 改过 `wrangler.toml` 后**必须重新部署**（Dashboard → Deployments → Redeploy，或 git push 触发）才会生效，刷新页面无效。
+  1. 到 **Settings → Functions → KV namespace bindings** 确认已添加绑定，且变量名**完全等于** `NAV_KV`（大小写敏感）；
+  2. 确认选中的 KV 命名空间在**同一个 Cloudflare 账号**下；
+  3. **添加/修改绑定后必须重新部署**才生效（Deployments → Redeploy，或 git push 触发），刷新页面无效。
 - 未绑 KV 却设了 env 密码 → 登录界面可能显示，但 `requireAuth` 因无 KV 直接放行，等于没保护；务必先让 KV 生效。
 - `env` 密码与初始化密码并存时，env 优先，登录用 env 那套。
 - 账号 < 2 字符或密码 < 6 位 → 初始化被拒（400）。
@@ -153,14 +163,15 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 
 ### 部署成功但后台保存不生效（真实踩过）
 - 现象：后台 `/admin.html` 能打开、能改，但点「保存更改」报错或不生效；顶部出现红色横幅
-  「⚠️ 存储未绑定 NAV_KV，保存不可用，请在 wrangler.toml 中配置绑定后重新部署」。
+  「⚠️ 存储未绑定 NAV_KV，保存不可用，请在 Cloudflare 后台绑定后重新部署」。
 - 横幅出现即表示代码里 `env.NAV_KV` 为空（只读降级模式），按下面顺序排查：
-  1. **看后台绑定界面是否显示** `Bindings for this project are being managed through wrangler.toml`
-     - 显示了 → 绑定只能改 `wrangler.toml`，后台无法添加，**这是正常的**。
-  2. 核对 `wrangler.toml`：`[[kv_namespaces]]` 的 `binding` 必须是 `NAV_KV`，`id` 必须与后台
-     **Workers & Pages → KV** 列表里该命名空间的 id 完全一致（且在同一账号下）。
-  3. 核对 `[[r2_buckets]]` 的 `bucket_name` 对应的桶**真实存在**（R2 → 桶列表）。桶不存在会导致部署失败。
-  4. **改动 `wrangler.toml` 后必须重新部署**才生效：git push 自动触发，或 Dashboard → Deployments → **Redeploy**。
+  1. 到 **Settings → Functions → KV namespace bindings** 确认绑定已添加，变量名**完全等于** `NAV_KV`。
+     - 若界面顶部显示 `Bindings for this project are being managed through wrangler.toml` → 说明
+       `wrangler.toml` 里存在 `pages_build_output_dir`，后台被禁用。把该字段删掉即可恢复后台管理。
+  2. 确认选中的 KV 命名空间在**同一个 Cloudflare 账号**下。
+  3. 确认 **R2 桶 `nav-site-uploads` 真实存在**（R2 → 桶列表），并在
+     Settings → Functions → R2 buckets bindings 绑定为 `NAV_R2`（桶不存在会导致部署失败）。
+  4. **添加/修改绑定后必须重新部署**才生效：Dashboard → Deployments → **Redeploy**，或 git push 触发。
      刷新页面不会让新绑定生效。
   5. 重新部署成功后刷新 `/admin.html` → 横幅消失即表示 KV 已绑定，可正常保存。
 - 只想让首页可浏览、暂不保存：未绑定 KV 时首页本就以只读种子数据正常展示，不影响访问。

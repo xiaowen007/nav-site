@@ -1,21 +1,34 @@
-# 共享导航 - Cloudflare Pages 配置
+# 共享导航 - Wrangler 配置
 #
-# KV / R2 绑定说明（重要）：
-# - 因为本文件含 pages_build_output_dir，Cloudflare Pages 以本文件为配置的唯一来源，
-#   后台 Settings → Functions 的绑定界面会被禁用，并显示
-#   "Bindings for this project are being managed through wrangler.toml."（正常提示，不是错误）。
-# - 因此绑定只能在下方 [[kv_namespaces]] / [[r2_buckets]] 里修改，无需也无法在后台添加。
-# - 前置条件：V2 构建系统 + Wrangler >= 3.45.0 + 本文件存在 pages_build_output_dir（均已满足）。
-# - 下方 KV id / R2 桶名指向的资源必须真实存在（且在同一 Cloudflare 账号下），
-#   否则部署会失败。
-# - 改动本文件后【必须重新部署】才会生效（git push 自动触发，或后台 Redeploy），
-#   仅刷新页面不会让新绑定生效。
-# - 未绑定 KV/R2 时站点以只读种子数据运行，写操作返回 503 提示。
-# 详见 CLOUDFLARE.md「二、创建存储」与「八、部署成功但后台保存不生效」。
+# 【重要】本文件【故意不写】 pages_build_output_dir。
+#
+# Cloudflare Pages 的规则（见官方文档 Pages Functions → Wrangler configuration）：
+#   - 含 pages_build_output_dir
+#       → 以本文件为生产配置唯一来源，后台 Settings → Functions 的绑定界面被禁用，
+#         并显示 "Bindings for this project are being managed through wrangler.toml."
+#   - 不含 pages_build_output_dir
+#       → 本文件仅用于本地开发（wrangler pages dev）；
+#         生产配置（含 KV / R2 绑定）由 Cloudflare 后台管理，可在后台随时增删改。
+#
+# 本项目选择「后台管理 KV / R2 绑定」，因此不添加该字段。
+#
+# ── 生产环境请在 Cloudflare 后台配置（详见 CLOUDFLARE.md）──────────────
+#   1. Settings → Builds & deployments
+#        Build command：留空
+#        Build output directory：.（点号 = 仓库根目录）
+#   2. Settings → Functions → KV namespace bindings → Add
+#        Variable name：NAV_KV   → 选择你的 KV 命名空间
+#   3. Settings → Functions → R2 buckets bindings → Add
+#        Variable name：NAV_R2   → 选择桶 nav-site-uploads
+#   4. 绑定改动后【必须重新部署】才生效（git push 自动触发，或 Deployments → Redeploy）。
+# ────────────────────────────────────────────────────────────
+#
+# 若想改回「用 wrangler.toml 管理绑定」，只需把 pages_build_output_dir = "." 加回来即可。
 
 name = "nav-site"
-pages_build_output_dir = "."
 compatibility_date = "2024-11-01"
+
+# 以下绑定仅供本地开发 `wrangler pages dev` 使用；生产绑定以 Cloudflare 后台为准。
 
 # 导航数据 + 配置存储（替代本地 data/sites.json / config.json）
 [[kv_namespaces]]
