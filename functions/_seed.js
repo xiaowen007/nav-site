@@ -21,7 +21,7 @@ export const SEED = {
         "external": false
       }
     ],
-    "cardSize": "medium",
+    "cardSize": "small",
     "cardColumns": 0,
     "cardRadius": 14,
     "cardShadow": true,
