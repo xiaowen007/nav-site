@@ -1,6 +1,6 @@
 // GET  /api/config -> 返回当前 AI/鉴权配置（不含密钥明文，需登录）
 // POST /api/config -> 更新配置并写入 KV（需登录）
-import { loadConfig, saveConfig, sendJSON, requireAuth, readBody } from '../_lib.js';
+import { loadConfig, saveConfig, sendJSON, requireAuth, readBody, bindingErrorResponse } from '../_lib.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -45,7 +45,13 @@ export async function onRequestPost(context) {
     if (body.ADMIN_PASSWORD.length < 6) return sendJSON({ error: '新密码至少 6 位' }, 400);
     cfg.ADMIN_PASSWORD = body.ADMIN_PASSWORD;
   }
-  await saveConfig(env, cfg);
+  try {
+    await saveConfig(env, cfg);
+  } catch (e) {
+    const r = bindingErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
   return sendJSON({
     ok: true,
     aiEnabled: !!cfg.AI_API_KEY,

@@ -1,5 +1,5 @@
 // POST /api/visit -> 按 url 累加访问次数（前台点击上报，匿名、无需密码）
-import { loadData, saveData, sendJSON, readBody } from '../_lib.js';
+import { loadData, saveData, sendJSON, readBody, bindingErrorResponse } from '../_lib.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -16,6 +16,12 @@ export async function onRequestPost(context) {
     if (l) { l.visits = (l.visits || 0) + 1; found = l; break; }
   }
   if (!found) return sendJSON({ error: '未找到该链接' }, 404);
-  await saveData(env, data);
+  try {
+    await saveData(env, data);
+  } catch (e) {
+    const r = bindingErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
   return sendJSON({ ok: true, visits: found.visits });
 }

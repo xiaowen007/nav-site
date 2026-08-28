@@ -25,6 +25,10 @@ npx wrangler r2 bucket create nav-site-uploads
 ```
 
 > 绑定名必须分别是 `NAV_KV` 和 `NAV_R2`（代码里写死了）。桶名 `nav-site-uploads` 可改，但需同步改 wrangler.toml。
+>
+> **KV 命名空间 / R2 桶不需要在部署前就建好**：项目已支持「部署后手动绑定」——
+> 即使绑定尚未添加，部署也能成功，首页以**只读种子数据**正常展示；待你在后台添加绑定后，
+> 保存/配置/上传等写操作自动生效，数据持久化到 KV / R2。
 
 ## 三、部署（两种方式选其一）
 
@@ -41,13 +45,15 @@ npm run deploy     # = npx wrangler pages deploy .
 
 1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → 连接 Git 仓库 `xiaowen007/nav-site`。
 2. 构建设置：**Build command** 留空，**Build output directory** 填 `.`（点号，表示根目录）。
-3. 进入项目 **Settings → Functions → KV namespace bindings**，添加：
-   - 变量名 `NAV_KV` → 选你刚建的 KV 命名空间
-4. 进入 **Settings → Functions → R2 buckets bindings**，添加：
+3. 直接部署即可（**无需预先绑定 KV/R2**）。此时网站以只读种子数据正常打开。
+4. 部署后，进入项目 **Settings → Functions → KV namespace bindings**，添加：
+   - 变量名 `NAV_KV` → 选你建的 KV 命名空间
+5. 进入 **Settings → Functions → R2 buckets bindings**，添加：
    - 变量名 `NAV_R2` → 选 `nav-site-uploads`
-5. 保存后触发一次部署（push 代码即自动重新部署）。
+6. 绑定保存后**无需重新部署**，刷新页面即生效（写操作立即变为可读写）。
 
 > ⚠️ Git 连接方式下，绑定**不会**自动从 wrangler.toml 读取，必须在 Dashboard 里手动加（变量名一致即可）。
+> 绑定前若调用保存/上传接口，会返回 `503` 并提示「存储未绑定：NAV_KV / NAV_R2」，属预期行为，绑定后即恢复正常。
 
 ## 四、首次访问与数据
 

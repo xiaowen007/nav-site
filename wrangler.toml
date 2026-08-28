@@ -1,6 +1,11 @@
 # 共享导航 - Cloudflare Pages 配置
-# 部署前请先：npx wrangler login
-# 并创建 KV / R2（见 CLOUDFLARE.md），把下方 KV id 替换为你的真实 id。
+#
+# KV / R2 绑定说明：
+# - Git 连接（Workers & Pages）部署时，wrangler.toml 里的绑定段会被后台绑定取代，
+#   变量名必须为 NAV_KV / NAV_R2，可在 Cloudflare 后台手动添加（部署前或部署后均可）。
+# - 下方已填入真实 KV 命名空间 id（来自 Cloudflare 后台），命令行 wrangler pages deploy 亦可用。
+# - 未绑定 KV/R2 时站点以只读种子数据运行，写操作返回 503 提示，绑定后自动恢复。
+# 详见 CLOUDFLARE.md。
 
 name = "nav-site"
 pages_build_output_dir = "."

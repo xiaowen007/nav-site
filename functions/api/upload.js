@@ -1,5 +1,5 @@
 // POST /api/upload -> 接收 base64 图片，写入 R2，返回 /uploads/xxx 访问地址（需管理员密码）
-import { sendJSON, requireAuth, readBody, b64ToArrayBuffer, UPLOAD_MIME } from '../_lib.js';
+import { sendJSON, requireAuth, readBody, b64ToArrayBuffer, UPLOAD_MIME, requireR2, bindingErrorResponse } from '../_lib.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -21,6 +21,13 @@ export async function onRequestPost(context) {
   if (buf.byteLength > 2 * 1024 * 1024) return sendJSON({ error: '图片超过 2MB' }, 400);
 
   const safeName = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
-  await env.NAV_R2.put(safeName, buf, { httpMetadata: { contentType: UPLOAD_MIME[ext] || 'application/octet-stream' } });
+  try {
+    const r2 = requireR2(env);
+    await r2.put(safeName, buf, { httpMetadata: { contentType: UPLOAD_MIME[ext] || 'application/octet-stream' } });
+  } catch (e) {
+    const r = bindingErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
   return sendJSON({ ok: true, url: '/uploads/' + safeName });
 }

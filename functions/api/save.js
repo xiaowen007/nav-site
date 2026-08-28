@@ -1,5 +1,5 @@
 // POST /api/save -> 单条链接 upsert（管理后台“保存此卡片”，需管理员密码）
-import { loadData, saveData, sendJSON, requireAuth, upsertCard, readBody } from '../_lib.js';
+import { loadData, saveData, sendJSON, requireAuth, upsertCard, readBody, bindingErrorResponse } from '../_lib.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -13,6 +13,12 @@ export async function onRequestPost(context) {
   if (!body || !body.url) return sendJSON({ error: '缺少 url' }, 400);
   const data = await loadData(env);
   const result = upsertCard(data, body);
-  await saveData(env, data);
+  try {
+    await saveData(env, data);
+  } catch (e) {
+    const r = bindingErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
   return sendJSON({ ok: true, ...result });
 }

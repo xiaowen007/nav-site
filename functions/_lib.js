@@ -7,6 +7,32 @@ import { SEED } from './_seed.js';
 const KV_SITES = 'sites';   // KV 中导航数据键
 const KV_CONFIG = 'config'; // KV 中配置键
 
+/* ---------- 绑定检测：KV/R2 未绑定（部署后尚未手动绑定）时优雅降级 ---------- */
+export const BINDING_MSG_KV =
+  '存储未绑定：KV 命名空间 NAV_KV 尚未绑定。请到 Cloudflare 后台 Workers & Pages → nav-site →' +
+  ' Settings → Functions → KV namespace bindings 添加（变量名必须为 NAV_KV）。绑定前页面可只读浏览，' +
+  ' 保存/配置等写操作暂不可用。';
+export const BINDING_MSG_R2 =
+  '存储未绑定：R2 桶 NAV_R2 尚未绑定。请到 Cloudflare 后台 Workers & Pages → nav-site →' +
+  ' Settings → Functions → R2 buckets bindings 添加（变量名 NAV_R2，桶名 nav-site-uploads）。绑定前图片上传不可用。';
+
+export function hasKV(env) { return !!(env && env.NAV_KV); }
+export function hasR2(env) { return !!(env && env.NAV_R2); }
+
+export function requireKV(env) {
+  if (!hasKV(env)) { const e = new Error(BINDING_MSG_KV); e.needBinding = true; throw e; }
+  return env.NAV_KV;
+}
+export function requireR2(env) {
+  if (!hasR2(env)) { const e = new Error(BINDING_MSG_R2); e.needBinding = true; throw e; }
+  return env.NAV_R2;
+}
+// 把“未绑定”错误转成 503 响应；其它错误返回 null（交上层继续抛出）
+export function bindingErrorResponse(e, code = 503) {
+  if (e && e.needBinding) return sendJSON({ error: e.message, needBinding: true }, code);
+  return null;
+}
+
 const DEFAULT_CFG = {
   AI_API_BASE: 'https://api.siliconflow.cn/v1',
   AI_API_KEY: '',
@@ -49,8 +75,10 @@ function decodeEntities(s) {
 /* ---------- 配置：环境变量(secrets) 优先，其次 KV ---------- */
 export async function loadConfig(env) {
   let stored = {};
-  try { stored = (await env.NAV_KV.get(KV_CONFIG, 'json')) || {}; }
-  catch { stored = {}; }
+  if (hasKV(env)) {
+    try { stored = (await env.NAV_KV.get(KV_CONFIG, 'json')) || {}; }
+    catch { stored = {}; }
+  }
   let required = stored.ADMIN_REQUIRED !== undefined ? !!stored.ADMIN_REQUIRED : DEFAULT_CFG.ADMIN_REQUIRED;
   if (env.ADMIN_REQUIRED === 'false' || env.ADMIN_REQUIRED === '0') required = false;
   if (env.ADMIN_REQUIRED === 'true' || env.ADMIN_REQUIRED === '1') required = true;
@@ -66,6 +94,7 @@ export async function loadConfig(env) {
 }
 
 export async function saveConfig(env, cfg) {
+  const kv = requireKV(env);
   const persist = {
     AI_API_BASE: cfg.AI_API_BASE,
     AI_API_KEY: cfg.AI_API_KEY,
@@ -75,13 +104,15 @@ export async function saveConfig(env, cfg) {
     ADMIN_REQUIRED: cfg.ADMIN_REQUIRED,
     SESSION_SECRET: cfg.SESSION_SECRET
   };
-  await env.NAV_KV.put(KV_CONFIG, JSON.stringify(persist));
+  await kv.put(KV_CONFIG, JSON.stringify(persist));
 }
 
 // 会话签名密钥：缺失时生成并持久化，避免每次部署后所有登录态失效
 export async function ensureSessionSecret(env) {
   const cfg = await loadConfig(env);
   if (cfg.SESSION_SECRET) return cfg;
+  // 未绑定 KV 时无法持久化密钥：用临时值降级（只读模式，不影响页面浏览）
+  if (!hasKV(env)) { cfg.SESSION_SECRET = 'unbound-' + Date.now().toString(36); return cfg; }
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   cfg.SESSION_SECRET = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -91,6 +122,15 @@ export async function ensureSessionSecret(env) {
 
 /* ---------- 数据读写（KV） ---------- */
 export async function loadData(env) {
+  // 未绑定 KV：返回种子数据（只读），保证部署后首页即可浏览，
+  // 待在后台手动绑定 NAV_KV 后，下次保存即自动写入持久化数据。
+  if (!hasKV(env)) {
+    const seed = JSON.parse(JSON.stringify(SEED));
+    seed.site = seed.site || {};
+    seed.categories = seed.categories || [];
+    seed.readOnly = true;
+    return seed;
+  }
   let data = null;
   try { data = await env.NAV_KV.get(KV_SITES, 'json'); } catch { data = null; }
   if (!data || !Array.isArray(data.categories)) {
@@ -104,7 +144,8 @@ export async function loadData(env) {
 }
 
 export async function saveData(env, data) {
-  await env.NAV_KV.put(KV_SITES, JSON.stringify(data));
+  const kv = requireKV(env);
+  await kv.put(KV_SITES, JSON.stringify(data));
 }
 
 /* ---------- 鉴权（账号密码登录 + HMAC 签名会话 token） ---------- */
@@ -160,6 +201,9 @@ export function tokenFromRequest(request) {
 }
 
 export async function requireAuth(request, env) {
+  // 未绑定 KV（部署后尚未手动绑定）：开放只读访问，避免后台完全锁死；
+  // 写操作会因缺 KV 返回“未绑定”提示，绑定后自动恢复正常鉴权。
+  if (!hasKV(env)) return true;
   const cfg = await loadConfig(env);
   if (!cfg.ADMIN_REQUIRED) return true; // 显式关闭登录保护
   if (await verifyTokenRaw(env, tokenFromRequest(request))) return true;

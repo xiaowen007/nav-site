@@ -1,6 +1,6 @@
 // GET  /api/sites  -> 读取导航数据（KV，空则播种种子）
 // POST /api/sites  -> 全量覆盖（管理控制台整体保存，需管理员密码）
-import { loadData, saveData, sendJSON, requireAuth, slug, readBody } from '../_lib.js';
+import { loadData, saveData, sendJSON, requireAuth, slug, readBody, bindingErrorResponse } from '../_lib.js';
 
 export async function onRequestGet({ env }) {
   const data = await loadData(env);
@@ -29,7 +29,13 @@ export async function onRequestPost(context) {
     c.links = Array.isArray(c.links) ? c.links : [];
     c.links.forEach((l) => { if (!l.url) l.url = ''; });
   });
-  await saveData(env, body);
+  try {
+    await saveData(env, body);
+  } catch (e) {
+    const r = bindingErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
   return sendJSON({
     ok: true,
     categories: body.categories.length,
