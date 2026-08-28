@@ -25,10 +25,25 @@ npx wrangler r2 bucket create nav-site-uploads
 ```
 
 > 绑定名必须分别是 `NAV_KV` 和 `NAV_R2`（代码里写死了）。桶名 `nav-site-uploads` 可改，但需同步改 wrangler.toml。
->
-> **KV 命名空间 / R2 桶不需要在部署前就建好**：项目已支持「部署后手动绑定」——
-> 即使绑定尚未添加，部署也能成功，首页以**只读种子数据**正常展示；待你在后台添加绑定后，
-> 保存/配置/上传等写操作自动生效，数据持久化到 KV / R2。
+
+### ⚠️ 重要：绑定由 `wrangler.toml` 管理，不在后台添加
+
+本项目的 `wrangler.toml` 已包含 `pages_build_output_dir`，因此 Cloudflare Pages **以 wrangler.toml 为配置的唯一来源**（含绑定）。你会看到：
+
+> Bindings for this project are being managed through wrangler.toml.
+
+这意味着：
+
+- **这是正常提示，不是错误**。后台的 KV / R2 绑定界面会被禁用，**不允许也无法**在那里添加绑定。
+- 绑定必须（且已经）写在 `wrangler.toml` 的 `[[kv_namespaces]]` / `[[r2_buckets]]` 里。
+- **KV 命名空间与 R2 桶本身必须先存在**（上面两条命令创建）。若 `wrangler.toml` 引用了账号里不存在的 KV id 或 R2 桶名，**部署会失败**。
+- 绑定在**部署时**写入运行环境 → 改动 `wrangler.toml` 后**必须重新部署**才生效，刷新页面不会生效。
+
+前提条件（必须同时满足，否则 wrangler.toml 会被当作"仅供本地开发"而忽略）：
+
+- 使用 **V2 构建系统**（部署日志出现 `Using v2 root directory strategy` 即满足）
+- Pages 使用的 Wrangler ≥ **3.45.0**（日志里有 `⛅️ wrangler 3.x`，本仓库已满足）
+- **必须存在 `pages_build_output_dir`** 字段（本仓库已填 `.`）
 
 ## 三、部署（两种方式选其一）
 
@@ -45,15 +60,16 @@ npm run deploy     # = npx wrangler pages deploy .
 
 1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → 连接 Git 仓库 `xiaowen007/nav-site`。
 2. 构建设置：**Build command** 留空，**Build output directory** 填 `.`（点号，表示根目录）。
-3. 直接部署即可（**无需预先绑定 KV/R2**）。此时网站以只读种子数据正常打开。
-4. 部署后，进入项目 **Settings → Functions → KV namespace bindings**，添加：
-   - 变量名 `NAV_KV` → 选你建的 KV 命名空间
-5. 进入 **Settings → Functions → R2 buckets bindings**，添加：
-   - 变量名 `NAV_R2` → 选 `nav-site-uploads`
-6. 绑定保存后**无需重新部署**，刷新页面即生效（写操作立即变为可读写）。
+3. 先按「二、创建存储」建好 KV 命名空间和 R2 桶，并把 KV id 填进 `wrangler.toml`。
+4. 直接部署。**绑定随 `wrangler.toml` 一起生效，不需要（也不能）在后台添加**。
+5. 想修改绑定 → 改 `wrangler.toml` 的 `id` / `bucket_name` → 提交推送 → **自动触发重新部署后生效**。
 
-> ⚠️ Git 连接方式下，绑定**不会**自动从 wrangler.toml 读取，必须在 Dashboard 里手动加（变量名一致即可）。
-> 绑定前若调用保存/上传接口，会返回 `503` 并提示「存储未绑定：NAV_KV / NAV_R2」，属预期行为，绑定后即恢复正常。
+> ✅ Git 连接方式下，绑定**同样从 `wrangler.toml` 读取**，无需在 Dashboard 手动添加。
+> 只有**没有** `wrangler.toml`（或其中没有 `pages_build_output_dir`）的项目，才需要在 Dashboard 的
+> Settings → Functions 里手动添加绑定——那种情况下后台不会显示"managed through wrangler.toml"提示。
+>
+> 若 `wrangler.toml` 里的 KV id / 桶名在账号中不存在，部署会报错失败；
+> 若引用正确但代码读到未绑定，写操作会返回 `503` 并提示「存储未绑定：NAV_KV / NAV_R2」。
 
 ## 四、首次访问与数据
 
@@ -81,8 +97,11 @@ npm run deploy     # = npx wrangler pages deploy .
 已登录后，后台顶栏「👤 账号」区可改密码（保存到 KV，同样要求 `NAV_KV` 已绑定）。
 
 ### 常见坑
-- 没绑 `NAV_KV` 就点初始化 → 报 `503 存储未绑定 NAV_KV`，先去后台绑定再试。
-- 未绑 KV 却设了 env 密码 → 登录界面可能显示，但 `requireAuth` 因无 KV 直接放行，等于没保护；务必先绑 KV。
+- 报 `503 存储未绑定 NAV_KV` → 说明 `env.NAV_KV` 为空。按下面排查：
+  1. 确认 `wrangler.toml` 里 `[[kv_namespaces]] binding = "NAV_KV"` 的 `id` 与 Cloudflare 后台 KV 列表里的**命名空间 id 完全一致**；
+  2. 确认该 KV 命名空间确实在**同一个 Cloudflare 账号**下；
+  3. 改过 `wrangler.toml` 后**必须重新部署**（Dashboard → Deployments → Redeploy，或 git push 触发）才会生效，刷新页面无效。
+- 未绑 KV 却设了 env 密码 → 登录界面可能显示，但 `requireAuth` 因无 KV 直接放行，等于没保护；务必先让 KV 生效。
 - `env` 密码与初始化密码并存时，env 优先，登录用 env 那套。
 - 账号 < 2 字符或密码 < 6 位 → 初始化被拒（400）。
 
@@ -132,9 +151,19 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 - 注意：`node --check` 只校验语法，**发现不了**路径层级错误；必须用 `node` 实际 `import()` 该文件才能验证。
 - 修复：按上表把对应层级的 `../` 数量改对即可。
 
-### 部署成功但首页异常
-- 若提示「存储未绑定：NAV_KV / NAV_R2」→ 属预期（未绑定 KV/R2 时写操作返回 503），按「方式 B 第 4–5 步」到后台绑定即可，绑定后刷新生效、无需重新部署。
-- 若已绑定仍 503 → 检查变量名是否**完全为** `NAV_KV` / `NAV_R2`。
+### 部署成功但后台保存不生效（真实踩过）
+- 现象：后台 `/admin.html` 能打开、能改，但点「保存更改」报错或不生效；顶部出现红色横幅
+  「⚠️ 存储未绑定 NAV_KV，保存不可用，请在 wrangler.toml 中配置绑定后重新部署」。
+- 横幅出现即表示代码里 `env.NAV_KV` 为空（只读降级模式），按下面顺序排查：
+  1. **看后台绑定界面是否显示** `Bindings for this project are being managed through wrangler.toml`
+     - 显示了 → 绑定只能改 `wrangler.toml`，后台无法添加，**这是正常的**。
+  2. 核对 `wrangler.toml`：`[[kv_namespaces]]` 的 `binding` 必须是 `NAV_KV`，`id` 必须与后台
+     **Workers & Pages → KV** 列表里该命名空间的 id 完全一致（且在同一账号下）。
+  3. 核对 `[[r2_buckets]]` 的 `bucket_name` 对应的桶**真实存在**（R2 → 桶列表）。桶不存在会导致部署失败。
+  4. **改动 `wrangler.toml` 后必须重新部署**才生效：git push 自动触发，或 Dashboard → Deployments → **Redeploy**。
+     刷新页面不会让新绑定生效。
+  5. 重新部署成功后刷新 `/admin.html` → 横幅消失即表示 KV 已绑定，可正常保存。
+- 只想让首页可浏览、暂不保存：未绑定 KV 时首页本就以只读种子数据正常展示，不影响访问。
 - 其他异常先看 Dashboard → Logs / 部署日志。
 
 ## 目录说明

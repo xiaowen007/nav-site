@@ -1,11 +1,17 @@
 # 共享导航 - Cloudflare Pages 配置
 #
-# KV / R2 绑定说明：
-# - Git 连接（Workers & Pages）部署时，wrangler.toml 里的绑定段会被后台绑定取代，
-#   变量名必须为 NAV_KV / NAV_R2，可在 Cloudflare 后台手动添加（部署前或部署后均可）。
-# - 下方已填入真实 KV 命名空间 id（来自 Cloudflare 后台），命令行 wrangler pages deploy 亦可用。
-# - 未绑定 KV/R2 时站点以只读种子数据运行，写操作返回 503 提示，绑定后自动恢复。
-# 详见 CLOUDFLARE.md。
+# KV / R2 绑定说明（重要）：
+# - 因为本文件含 pages_build_output_dir，Cloudflare Pages 以本文件为配置的唯一来源，
+#   后台 Settings → Functions 的绑定界面会被禁用，并显示
+#   "Bindings for this project are being managed through wrangler.toml."（正常提示，不是错误）。
+# - 因此绑定只能在下方 [[kv_namespaces]] / [[r2_buckets]] 里修改，无需也无法在后台添加。
+# - 前置条件：V2 构建系统 + Wrangler >= 3.45.0 + 本文件存在 pages_build_output_dir（均已满足）。
+# - 下方 KV id / R2 桶名指向的资源必须真实存在（且在同一 Cloudflare 账号下），
+#   否则部署会失败。
+# - 改动本文件后【必须重新部署】才会生效（git push 自动触发，或后台 Redeploy），
+#   仅刷新页面不会让新绑定生效。
+# - 未绑定 KV/R2 时站点以只读种子数据运行，写操作返回 503 提示。
+# 详见 CLOUDFLARE.md「二、创建存储」与「八、部署成功但后台保存不生效」。
 
 name = "nav-site"
 pages_build_output_dir = "."
