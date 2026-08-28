@@ -11,8 +11,14 @@ const DEFAULT_CFG = {
   AI_API_BASE: 'https://api.siliconflow.cn/v1',
   AI_API_KEY: '',
   AI_MODEL: 'Qwen/Qwen2.5-7B-Instruct',
-  ADMIN_PASSWORD: ''
+  ADMIN_USER: 'admin',
+  ADMIN_PASSWORD: '',
+  ADMIN_REQUIRED: true,
+  SESSION_SECRET: ''
 };
+
+const TOKEN_TTL = 7 * 24 * 3600 * 1000; // 登录有效期 7 天
+const SESSION_TTL_SHORT = 12 * 3600 * 1000; // 不勾选“记住我”时 12 小时
 
 /* ---------- 基础工具 ---------- */
 export function sendJSON(obj, code = 200) {
@@ -45,11 +51,17 @@ export async function loadConfig(env) {
   let stored = {};
   try { stored = (await env.NAV_KV.get(KV_CONFIG, 'json')) || {}; }
   catch { stored = {}; }
+  let required = stored.ADMIN_REQUIRED !== undefined ? !!stored.ADMIN_REQUIRED : DEFAULT_CFG.ADMIN_REQUIRED;
+  if (env.ADMIN_REQUIRED === 'false' || env.ADMIN_REQUIRED === '0') required = false;
+  if (env.ADMIN_REQUIRED === 'true' || env.ADMIN_REQUIRED === '1') required = true;
   return {
     AI_API_BASE: env.AI_API_BASE || stored.AI_API_BASE || DEFAULT_CFG.AI_API_BASE,
     AI_API_KEY: env.AI_API_KEY || stored.AI_API_KEY || '',
     AI_MODEL: env.AI_MODEL || stored.AI_MODEL || DEFAULT_CFG.AI_MODEL,
-    ADMIN_PASSWORD: env.ADMIN_PASSWORD || stored.ADMIN_PASSWORD || ''
+    ADMIN_USER: env.ADMIN_USER || stored.ADMIN_USER || DEFAULT_CFG.ADMIN_USER,
+    ADMIN_PASSWORD: env.ADMIN_PASSWORD || stored.ADMIN_PASSWORD || '',
+    ADMIN_REQUIRED: required,
+    SESSION_SECRET: env.SESSION_SECRET || stored.SESSION_SECRET || ''
   };
 }
 
@@ -58,9 +70,23 @@ export async function saveConfig(env, cfg) {
     AI_API_BASE: cfg.AI_API_BASE,
     AI_API_KEY: cfg.AI_API_KEY,
     AI_MODEL: cfg.AI_MODEL,
-    ADMIN_PASSWORD: cfg.ADMIN_PASSWORD
+    ADMIN_USER: cfg.ADMIN_USER,
+    ADMIN_PASSWORD: cfg.ADMIN_PASSWORD,
+    ADMIN_REQUIRED: cfg.ADMIN_REQUIRED,
+    SESSION_SECRET: cfg.SESSION_SECRET
   };
   await env.NAV_KV.put(KV_CONFIG, JSON.stringify(persist));
+}
+
+// 会话签名密钥：缺失时生成并持久化，避免每次部署后所有登录态失效
+export async function ensureSessionSecret(env) {
+  const cfg = await loadConfig(env);
+  if (cfg.SESSION_SECRET) return cfg;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  cfg.SESSION_SECRET = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  await saveConfig(env, cfg);
+  return cfg;
 }
 
 /* ---------- 数据读写（KV） ---------- */
@@ -81,11 +107,70 @@ export async function saveData(env, data) {
   await env.NAV_KV.put(KV_SITES, JSON.stringify(data));
 }
 
-/* ---------- 鉴权 ---------- */
+/* ---------- 鉴权（账号密码登录 + HMAC 签名会话 token） ---------- */
+function b64urlEncode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecodeToStr(str) {
+  const pad = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(pad + '==='.slice((pad.length + 3) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function toB64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function hmacKey(secret) {
+  return crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+}
+
+export async function issueToken(env, user, remember) {
+  const cfg = await ensureSessionSecret(env);
+  const exp = Date.now() + (remember ? TOKEN_TTL : SESSION_TTL_SHORT);
+  const payload = b64urlEncode(JSON.stringify({ u: user, exp }));
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(cfg.SESSION_SECRET), new TextEncoder().encode(payload));
+  return { token: payload + '.' + toB64url(sig), exp, user };
+}
+
+export async function verifyTokenRaw(env, token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const idx = token.lastIndexOf('.');
+  const payload = token.slice(0, idx), sig = token.slice(idx + 1);
+  if (!payload || !sig) return null;
+  const cfg = await ensureSessionSecret(env);
+  const expect = await crypto.subtle.sign('HMAC', await hmacKey(cfg.SESSION_SECRET), new TextEncoder().encode(payload));
+  if (sig !== toB64url(expect)) return null;
+  try {
+    const obj = JSON.parse(b64urlDecodeToStr(payload));
+    if (!obj || typeof obj.exp !== 'number' || obj.exp < Date.now()) return null;
+    return obj;
+  } catch { return null; }
+}
+
+export function tokenFromRequest(request) {
+  const auth = request.headers.get('authorization') || '';
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  return request.headers.get('x-admin-token') || '';
+}
+
 export async function requireAuth(request, env) {
   const cfg = await loadConfig(env);
-  if (!cfg.ADMIN_PASSWORD) return true; // 未设置密码则不保护
-  return request.headers.get('x-admin-password') === cfg.ADMIN_PASSWORD;
+  if (!cfg.ADMIN_REQUIRED) return true; // 显式关闭登录保护
+  if (await verifyTokenRaw(env, tokenFromRequest(request))) return true;
+  // 兼容旧的明文密码头
+  const pwd = request.headers.get('x-admin-password');
+  return !!(pwd && cfg.ADMIN_PASSWORD && pwd === cfg.ADMIN_PASSWORD);
+}
+
+export async function currentUser(request, env) {
+  const s = await verifyTokenRaw(env, tokenFromRequest(request));
+  return s ? s.u : null;
 }
 
 /* ---------- 网页抓取与元信息提取 ---------- */

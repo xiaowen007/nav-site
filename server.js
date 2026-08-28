@@ -9,6 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const crypto = require('crypto');
 
 const ROOT = __dirname;
 const PORT = process.env.PORT || 8787;
@@ -22,26 +23,123 @@ const DEFAULT_CFG = {
   AI_API_KEY: '',                                    // 免费大模型 Key（留空则走“无 AI 启发式识别”）
   AI_MODEL: 'Qwen/Qwen2.5-7B-Instruct',              // 免费模型示例
   AI_TIMEOUT: 15000,
-  ADMIN_PASSWORD: ''                                 // 后台管理密码（留空=不保护写接口）
+  ADMIN_USER: 'admin',                               // 后台管理员账号
+  ADMIN_PASSWORD: '',                                // 后台管理员密码（留空=尚未初始化）
+  ADMIN_REQUIRED: true,                              // 是否强制登录（true=关闭开放进入后台）
+  SESSION_SECRET: ''                                 // 会话签名密钥（首次运行自动生成）
 };
+
+const CONFIG_FILE = path.join(ROOT, 'config.json');
 
 function loadConfig() {
   let cfg = { ...DEFAULT_CFG };
-  const cfgPath = path.join(ROOT, 'config.json');
-  if (fs.existsSync(cfgPath)) {
-    try { cfg = { ...cfg, ...JSON.parse(fs.readFileSync(cfgPath, 'utf8')) }; }
+  if (fs.existsSync(CONFIG_FILE)) {
+    try { cfg = { ...cfg, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) }; }
     catch (e) { console.warn('[config] 读取 config.json 失败，使用默认值'); }
   }
   // 环境变量优先
   cfg.AI_API_BASE = process.env.AI_API_BASE || cfg.AI_API_BASE;
   cfg.AI_API_KEY = process.env.AI_API_KEY || cfg.AI_API_KEY;
   cfg.AI_MODEL = process.env.AI_MODEL || cfg.AI_MODEL;
+  cfg.ADMIN_USER = process.env.ADMIN_USER || cfg.ADMIN_USER;
   cfg.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || cfg.ADMIN_PASSWORD;
+  if (process.env.ADMIN_REQUIRED === 'false' || process.env.ADMIN_REQUIRED === '0') cfg.ADMIN_REQUIRED = false;
+  if (process.env.ADMIN_REQUIRED === 'true' || process.env.ADMIN_REQUIRED === '1') cfg.ADMIN_REQUIRED = true;
+  // 会话签名密钥：缺失则生成并持久化，避免每次重启后所有登录态失效
+  if (!cfg.SESSION_SECRET) {
+    cfg.SESSION_SECRET = crypto.randomBytes(32).toString('hex');
+    persistConfig(cfg);
+  }
   return cfg;
 }
+
+// 持久化配置：保留文件中已有的其他键，避免覆盖未知字段
+function persistConfig(cfg) {
+  let existing = {};
+  if (fs.existsSync(CONFIG_FILE)) {
+    try { existing = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) || {}; } catch (e) { existing = {}; }
+  }
+  const merged = { ...existing, ...cfg };
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+}
+
 const CFG = loadConfig();
 const AI_ENABLED = !!CFG.AI_API_KEY;
 CFG.AI_ENABLED = AI_ENABLED;
+
+/* ---------- 登录会话（HMAC 签名 token，不使用明文密码传输） ---------- */
+const TOKEN_TTL = 7 * 24 * 3600 * 1000; // 登录有效期 7 天
+
+function b64url(str) {
+  return Buffer.from(str, 'utf8').toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(str) {
+  return Buffer.from(String(str).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+function signPayload(payload) {
+  return crypto.createHmac('sha256', CFG.SESSION_SECRET).update(payload).digest('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function issueToken(user, ttlMs, remember) {
+  const exp = Date.now() + (ttlMs || (remember ? TOKEN_TTL : 12 * 3600 * 1000));
+  const payload = b64url(JSON.stringify({ u: user, exp }));
+  return { token: payload + '.' + signPayload(payload), exp, user };
+}
+function verifyToken(token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const idx = token.lastIndexOf('.');
+  const payload = token.slice(0, idx), sig = token.slice(idx + 1);
+  if (!payload || !sig) return null;
+  const expect = signPayload(payload);
+  // 定长比较，防止时序侧信道
+  if (sig.length !== expect.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
+  try {
+    const obj = JSON.parse(b64urlDecode(payload));
+    if (!obj || typeof obj.exp !== 'number' || obj.exp < Date.now()) return null;
+    return obj;
+  } catch (e) { return null; }
+}
+function tokenFromReq(req) {
+  const auth = String(req.headers['authorization'] || '');
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  return req.headers['x-admin-token'] ? String(req.headers['x-admin-token']) : '';
+}
+// 是否已登录：支持 Bearer token；兼容旧的 X-Admin-Password 明文头
+function isAuthed(req) {
+  if (!CFG.ADMIN_REQUIRED) return true;
+  if (verifyToken(tokenFromReq(req))) return true;
+  const pwd = req.headers['x-admin-password'];
+  return !!(pwd && CFG.ADMIN_PASSWORD && pwd === CFG.ADMIN_PASSWORD);
+}
+function authUser(req) {
+  const s = verifyToken(tokenFromReq(req));
+  return s ? s.u : null;
+}
+
+/* 登录暴力破解防护：同一来源连续失败 8 次后冷却 5 分钟（进程内存，重启即清） */
+const LOGIN_ATTEMPTS = new Map();
+const MAX_ATTEMPTS = 8;
+const COOLDOWN_MS = 5 * 60 * 1000;
+function clientIp(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xff || req.socket.remoteAddress || 'unknown';
+}
+function throttleCheck(ip) {
+  const rec = LOGIN_ATTEMPTS.get(ip);
+  if (!rec || !rec.until) return 0;
+  if (Date.now() > rec.until) { LOGIN_ATTEMPTS.delete(ip); return 0; }
+  return rec.until - Date.now();
+}
+function throttleFail(ip) {
+  const rec = LOGIN_ATTEMPTS.get(ip) || { n: 0, until: 0 };
+  rec.n += 1;
+  if (rec.n >= MAX_ATTEMPTS) { rec.until = Date.now() + COOLDOWN_MS; rec.n = 0; }
+  LOGIN_ATTEMPTS.set(ip, rec);
+  return rec.n;
+}
+function throttleReset(ip) { LOGIN_ATTEMPTS.delete(ip); }
 
 /* ---------- 工具 ---------- */
 function sendJSON(res, code, obj) {
@@ -76,6 +174,20 @@ function loadData() {
 }
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2) + '\n', 'utf8');
+  syncDataJs(data);
+}
+
+/* 同步生成 data/sites.js：以 file:// 直接打开页面时浏览器会拦截 fetch，
+ * 前端会退回用 <script> 标签读取该文件（脚本标签不受 file:// 限制）。 */
+function syncDataJs(data) {
+  try {
+    const js = '/* 自动生成，请勿手工修改：由 data/sites.json 同步而来。\n' +
+      ' * 供以 file:// 方式直接打开 index.html 时兜底读取。\n */\n' +
+      'window.__NAV_DATA__ = ' + JSON.stringify(data) + ';\n';
+    fs.writeFileSync(path.join(ROOT, 'data', 'sites.js'), js, 'utf8');
+  } catch (e) {
+    console.warn('[data] 生成 data/sites.js 失败：' + e.message);
+  }
 }
 
 /* ---------- 网页抓取与元信息提取 ---------- */
@@ -257,6 +369,63 @@ const MIME = {
   '.ico': 'image/x-icon'
 };
 
+/* ---------- 在线壁纸库数据源 ---------- */
+async function fetchJSON(url, timeoutMs) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs || 12000);
+  try {
+    const r = await fetch(url, {
+      signal: ac.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      }
+    });
+    if (!r.ok) throw new Error('上游返回 HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(timer); }
+}
+
+async function fetchWallpapers(source, page, q) {
+  if (source === 'bing') {
+    // Bing 每日壁纸：idx 为偏移量，n 为数量
+    const n = 8;
+    const idx = (page - 1) * n;
+    const j = await fetchJSON(`https://cn.bing.com/HPImageArchive.aspx?format=js&idx=${idx}&n=${n}&mkt=zh-CN`);
+    return (j.images || []).map((im) => ({
+      url: 'https://cn.bing.com' + (im.url || ''),
+      thumb: 'https://cn.bing.com' + (im.urlbase || '') + '_400x240.jpg',
+      title: (im.copyright || im.title || 'Bing 每日壁纸').toString()
+    })).filter((x) => x.url && x.url !== 'https://cn.bing.com');
+  }
+
+  if (source === '360') {
+    // 360 壁纸：cid 为分类 id，q 可传入分类 id
+    const start = (page - 1) * 20;
+    const cid = String(q || 1).replace(/\D/g, '') || '1';
+    const j = await fetchJSON(`https://wallpaper.apc.360.cn/index.php?c=WallPaperAndroid&a=getAppsByCategory&cid=${cid}&start=${start}&count=20`);
+    const arr = (j && j.data) || [];
+    return arr.map((it) => ({
+      url: it.url || it.img || '',
+      thumb: it.thumb || it.small || it.url || '',
+      title: (it.name || it.title || '360 壁纸').toString()
+    })).filter((x) => x.url);
+  }
+
+  if (source === 'wallhaven') {
+    const p = Math.max(1, page);
+    const query = encodeURIComponent(q || 'landscape');
+    const j = await fetchJSON(`https://wallhaven.cc/api/v1/search?q=${query}&sorting=relevance&page=${p}&categories=111&purity=100`);
+    return (j.data || []).map((it) => ({
+      url: it.path || '',
+      thumb: (it.thumbs && (it.thumbs.small || it.thumbs.large)) || it.path || '',
+      title: 'Wallhaven #' + it.id
+    })).filter((x) => x.url);
+  }
+
+  throw new Error('不支持的壁纸源：' + source);
+}
+
 function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const filePath = path.normalize(path.join(ROOT, rel));
@@ -276,11 +445,11 @@ const server = http.createServer(async (req, res) => {
   const pathname = parsed.pathname;
 
   try {
-    // 写接口鉴权：设置 ADMIN_PASSWORD 后，写操作需带 X-Admin-Password 头
+    // 写接口鉴权：开启登录保护后，写操作需带 Bearer 会话 token
     const PROTECTED = ['/api/sites', '/api/save', '/api/recognize', '/api/config', '/api/upload'];
     if (['POST', 'PUT', 'DELETE'].includes(req.method) && PROTECTED.includes(pathname)) {
-      if (CFG.ADMIN_PASSWORD && req.headers['x-admin-password'] !== CFG.ADMIN_PASSWORD) {
-        return sendJSON(res, 401, { error: '需要管理员密码', needAuth: true });
+      if (!isAuthed(req)) {
+        return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
       }
     }
 
@@ -359,6 +528,20 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { ok: true, url: '/uploads/' + safeName });
     }
 
+    /* 在线壁纸库：服务端代理抓取，规避浏览器 CORS（需登录） */
+    if (pathname === '/api/wallpapers' && req.method === 'GET') {
+      if (!isAuthed(req)) return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
+      const source = String(parsed.query.source || 'bing');
+      const page = Math.max(1, parseInt(parsed.query.page, 10) || 1);
+      const q = String(parsed.query.q || '');
+      try {
+        const list = await fetchWallpapers(source, page, q);
+        return sendJSON(res, 200, { ok: true, source, page, list });
+      } catch (e) {
+        return sendJSON(res, 502, { error: '获取壁纸失败：' + e.message });
+      }
+    }
+
     /* 链接访问统计：按 url 累加 visits 并写回 sites.json（前台点击时上报，匿名、无需密码） */
     if (pathname === '/api/visit' && req.method === 'POST') {
       const body = await readBody(req);
@@ -376,12 +559,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/config' && req.method === 'GET') {
+      if (!isAuthed(req)) return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
       return sendJSON(res, 200, {
         aiEnabled: CFG.AI_ENABLED,
         model: CFG.AI_ENABLED ? CFG.AI_MODEL : null,
         base: CFG.AI_API_BASE,
         apiKeySet: CFG.AI_ENABLED,
-        protected: !!CFG.ADMIN_PASSWORD
+        protected: !!CFG.ADMIN_PASSWORD,
+        required: !!CFG.ADMIN_REQUIRED,
+        user: CFG.ADMIN_USER || 'admin'
       });
     }
 
@@ -390,19 +576,86 @@ const server = http.createServer(async (req, res) => {
       if (body.AI_API_BASE) CFG.AI_API_BASE = body.AI_API_BASE;
       if (body.AI_MODEL) CFG.AI_MODEL = body.AI_MODEL;
       if (typeof body.AI_API_KEY === 'string') CFG.AI_API_KEY = body.AI_API_KEY;
-      if (body.ADMIN_PASSWORD !== undefined) CFG.ADMIN_PASSWORD = body.ADMIN_PASSWORD; // 显式空串=关闭保护
+      if (body.ADMIN_USER !== undefined && String(body.ADMIN_USER).trim().length >= 2) {
+        CFG.ADMIN_USER = String(body.ADMIN_USER).trim();
+      }
+      if (body.ADMIN_REQUIRED !== undefined) CFG.ADMIN_REQUIRED = !!body.ADMIN_REQUIRED;
+      // 修改密码需校验原密码，防止借道本接口越权改密
+      if (typeof body.ADMIN_PASSWORD === 'string' && body.ADMIN_PASSWORD) {
+        if (body.oldPassword !== CFG.ADMIN_PASSWORD) {
+          return sendJSON(res, 403, { error: '原密码不正确，无法修改密码' });
+        }
+        if (body.ADMIN_PASSWORD.length < 6) return sendJSON(res, 400, { error: '新密码至少 6 位' });
+        CFG.ADMIN_PASSWORD = body.ADMIN_PASSWORD;
+      }
       CFG.AI_ENABLED = !!CFG.AI_API_KEY;
-      const cfgPath = path.join(ROOT, 'config.json');
-      try {
-        const persist = {
-          AI_API_BASE: CFG.AI_API_BASE,
-          AI_API_KEY: CFG.AI_API_KEY,
-          AI_MODEL: CFG.AI_MODEL,
-          ADMIN_PASSWORD: CFG.ADMIN_PASSWORD
-        };
-        fs.writeFileSync(cfgPath, JSON.stringify(persist, null, 2) + '\n', 'utf8');
-      } catch (e) { return sendJSON(res, 500, { error: '写入 config.json 失败：' + e.message }); }
-      return sendJSON(res, 200, { ok: true, aiEnabled: CFG.AI_ENABLED, model: CFG.AI_MODEL, protected: !!CFG.ADMIN_PASSWORD });
+      try { persistConfig(CFG); }
+      catch (e) { return sendJSON(res, 500, { error: '写入 config.json 失败：' + e.message }); }
+      return sendJSON(res, 200, {
+        ok: true, aiEnabled: CFG.AI_ENABLED, model: CFG.AI_MODEL,
+        protected: !!CFG.ADMIN_PASSWORD, required: CFG.ADMIN_REQUIRED, user: CFG.ADMIN_USER
+      });
+    }
+
+    /* ---------- 登录 / 鉴权 ---------- */
+    // GET /api/auth -> 登录状态（公开，不含敏感信息）
+    if (pathname === '/api/auth' && req.method === 'GET') {
+      const s = verifyToken(tokenFromReq(req));
+      return sendJSON(res, 200, {
+        required: !!CFG.ADMIN_REQUIRED,
+        configured: !!CFG.ADMIN_PASSWORD,
+        user: CFG.ADMIN_USER || 'admin',
+        loggedIn: !!s,
+        loginUser: s ? s.u : null
+      });
+    }
+
+    // POST /api/auth/setup -> 首次初始化管理员账号（仅在尚未设置密码时可用）
+    if (pathname === '/api/auth/setup' && req.method === 'POST') {
+      const body = await readBody(req);
+      const user = String((body && body.user) || '').trim();
+      const pwd = String((body && body.password) || '');
+      if (CFG.ADMIN_PASSWORD) return sendJSON(res, 409, { error: '管理员账号已初始化，请直接登录' });
+      if (user.length < 2) return sendJSON(res, 400, { error: '账号至少 2 个字符' });
+      if (pwd.length < 6) return sendJSON(res, 400, { error: '密码至少 6 位' });
+      CFG.ADMIN_USER = user; CFG.ADMIN_PASSWORD = pwd; CFG.ADMIN_REQUIRED = true;
+      persistConfig(CFG);
+      const t = issueToken(user, TOKEN_TTL, true);
+      return sendJSON(res, 200, { ok: true, ...t, required: true });
+    }
+
+    // POST /api/auth/login -> 账号密码登录，返回会话 token
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+      const ip = clientIp(req);
+      const wait = throttleCheck(ip);
+      if (wait > 0) {
+        return sendJSON(res, 429, { error: '尝试过于频繁，请 ' + Math.ceil(wait / 1000) + ' 秒后重试' });
+      }
+      const body = await readBody(req);
+      const user = String((body && body.user) || '').trim();
+      const pwd = String((body && body.password) || '');
+      if (!CFG.ADMIN_PASSWORD) return sendJSON(res, 409, { error: '尚未初始化管理员账号', needSetup: true });
+      if (user !== CFG.ADMIN_USER || pwd !== CFG.ADMIN_PASSWORD) {
+        const left = 8 - throttleFail(ip);
+        return sendJSON(res, 401, {
+          error: '账号或密码不正确' + (left > 0 && left <= 5 ? `（还可尝试 ${left} 次）` : '')
+        });
+      }
+      throttleReset(ip);
+      const t = issueToken(user, TOKEN_TTL, !!body.remember);
+      return sendJSON(res, 200, { ok: true, ...t });
+    }
+
+    // POST /api/auth/logout -> 登出（服务端无状态，前端清除 token 即可）
+    if (pathname === '/api/auth/logout' && req.method === 'POST') {
+      return sendJSON(res, 200, { ok: true });
+    }
+
+    // GET /api/auth/verify -> 校验当前 token 是否有效
+    if (pathname === '/api/auth/verify' && req.method === 'GET') {
+      const s = verifyToken(tokenFromReq(req));
+      if (!s) return sendJSON(res, 401, { error: '登录已失效，请重新登录', needAuth: true });
+      return sendJSON(res, 200, { ok: true, user: s.u, exp: s.exp });
     }
 
     if (req.method === 'GET') return serveStatic(req, res, pathname);

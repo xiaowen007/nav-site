@@ -7,16 +7,35 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <!-- 顶栏 -->
+  <!-- 顶栏（搜索引擎搜索已上移至此处） -->
   <header class="topbar">
     <button class="menu-toggle" id="menuToggle" aria-label="切换导航">☰</button>
     <div class="brand"><span id="siteLogo">🌐</span><span id="siteTitle">共享导航</span></div>
-    <div class="search-box">
-      <input type="text" id="searchInput" placeholder="搜索站点 / 分类…" autocomplete="off" />
-      <span class="search-clear" id="searchClear" title="清除">✕</span>
+
+    <div class="tb-searches">
+      <!-- 搜索引擎网页搜索 -->
+      <div class="ws-wrap">
+        <form class="ws-form" id="wsForm" autocomplete="off" role="search">
+          <div class="ws-input-wrap">
+            <span class="ws-badge" id="wsBadge" title="切换搜索引擎" role="button">百</span>
+            <input type="text" id="wsInput" placeholder="搜索网页内容…" aria-label="搜索关键词" />
+            <button type="button" class="ws-clear" id="wsClear" title="清除" aria-label="清除关键词">✕</button>
+          </div>
+          <button type="submit" class="ws-go" id="wsGo" title="开始搜索">🔍<span class="ws-go-txt"> 搜索</span></button>
+        </form>
+        <!-- 引擎列表：点左侧徽标展开 / 收起 -->
+        <div class="ws-engines" id="wsEngines" aria-label="切换搜索引擎"></div>
+      </div>
+
+      <!-- 站内站点 / 分类搜索 -->
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索站点 / 分类…" autocomplete="off" />
+        <span class="search-clear" id="searchClear" title="清除">✕</span>
+      </div>
     </div>
+
     <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
-    <a class="admin-link" href="admin.html" title="AI 自动收录 / 管理">＋ AI 收录</a>
+    <a class="admin-link" href="admin.html" title="AI 自动收录 / 管理">＋<span class="al-txt"> AI 收录</span></a>
   </header>
 
   <div class="layout">

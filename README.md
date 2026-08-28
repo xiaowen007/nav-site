@@ -197,4 +197,4 @@ GitHub 仅托管代码，要让别人通过网址访问需部署到支持 Node.j
 ---
 
 ## 许可证
-[MIT](./LICENSE) © 2026 基于科技共享导航模板优化 NavSite
+[MIT](./LICENSE) © 2026 共享导航 NavSite

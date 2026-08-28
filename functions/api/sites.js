@@ -10,7 +10,7 @@ export async function onRequestGet({ env }) {
 export async function onRequestPost(context) {
   const { request, env } = context;
   if (!(await requireAuth(request, env))) {
-    return sendJSON({ error: '需要管理员密码', needAuth: true }, 401);
+    return sendJSON({ error: '请先登录后台', needAuth: true }, 401);
   }
   let body;
   try { body = await readBody(request); }
