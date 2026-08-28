@@ -417,13 +417,7 @@
     catch (e) { alert('操作失败：' + e.message); }
   }
 
-  /* ---------- 系统设置 ---------- */
-  function openSettings() {
-    populateSettings();
-    $('#settingsModal').style.display = 'flex';
-  }
-  function closeSettings() { $('#settingsModal').style.display = 'none'; }
-
+  /* ---------- 系统设置（内联面板） ---------- */
   function populateSettings() {
     const s = state.data.site || {};
     $('#setTitle').value = s.title || '';
@@ -464,9 +458,6 @@
 
     // 功能图标
     renderFuncIcons(s.functionIcons || []);
-
-    // AI 配置
-    loadSettingsCfg();
   }
 
   function renderFuncIcons(list) {
@@ -500,46 +491,6 @@
     state.dirty = true; updateSaved();
   }
 
-  async function loadSettingsCfg() {
-    try {
-      const cfg = await api('/api/config', 'GET');
-      $('#setCfgBase').value = cfg.base || '';
-      $('#setCfgModel').value = cfg.model || '';
-      $('#setCfgKey').value = '';
-      $('#setCfgPwd').value = '';
-      $('#setCfgStatus').textContent = cfg.aiEnabled ? ('已开启 · ' + cfg.model) : '未开启（启发式）';
-    } catch (e) {}
-  }
-
-  async function saveSettingsCfg() {
-    const payload = {
-      AI_API_BASE: $('#setCfgBase').value.trim(),
-      AI_API_KEY: $('#setCfgKey').value.trim(),
-      AI_MODEL: $('#setCfgModel').value.trim()
-    };
-    const pwd = $('#setCfgPwd').value;
-    if (pwd) payload.ADMIN_PASSWORD = pwd;
-    try {
-      const r = await api('/api/config', 'POST', payload);
-      state.protected = !!r.protected;
-      $('#setCfgStatus').textContent = r.aiEnabled ? ('已开启 · ' + r.model) : '未开启（启发式）';
-      alert(r.aiEnabled ? 'AI 已开启，已保存 config.json' : '已保存（未填 Key，使用启发式）');
-      // 同步回主控制台 ③ 卡的显示
-      if ($('#cfgBase')) $('#cfgBase').value = $('#setCfgBase').value;
-      if ($('#cfgModel')) $('#cfgModel').value = $('#setCfgModel').value;
-      if ($('#aiStatus')) {
-        $('#aiStatus').textContent = r.aiEnabled ? ('已开启 · ' + r.model) : '未开启（启发式）';
-        $('#aiStatus').className = 'ai-status ' + (r.aiEnabled ? 'ai-on' : 'ai-off');
-      }
-    } catch (e) { alert('保存失败：' + e.message); }
-  }
-
-  async function clearSettingsPwd() {
-    if (!confirm('确定关闭后台密码保护？')) return;
-    try { await api('/api/config', 'POST', { ADMIN_PASSWORD: '' }); state.protected = false; alert('已关闭密码保护'); }
-    catch (e) { alert('操作失败：' + e.message); }
-  }
-
   function saveSettings() {
     const s = state.data.site = state.data.site || {};
     s.title = $('#setTitle').value.trim();
@@ -557,27 +508,11 @@
     s.wallpaperBlur = +$('#setWallpaperBlur').value;
     // seg 按钮（搜索/分类/卡片大小/壁纸类型）已经在点击时即时写回
     state.dirty = true; updateSaved();
-    closeSettings();
-    alert('已保存到内存，点「① 保存」一键写入 sites.json 后即可在首页生效。');
-  }
-
-  function switchSettingsTab(name) {
-    document.querySelectorAll('.settings-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
-    document.querySelectorAll('.settings-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
-    if (name === 'ai') loadSettingsCfg();
+    $('#settingsSaveStatus').textContent = '✓ 已写入内存，点「① 导航数据管理」的「💾 保存」即可生效';
   }
 
   function bindSettings() {
-    $('#openSettings').addEventListener('click', openSettings);
-    $('#settingsClose').addEventListener('click', closeSettings);
-    $('#settingsCancel').addEventListener('click', closeSettings);
     $('#settingsSave').addEventListener('click', saveSettings);
-    $('#settingsModal').addEventListener('click', (e) => { if (e.target.id === 'settingsModal') closeSettings(); });
-
-    // Tab 切换
-    document.querySelectorAll('.settings-tab').forEach((t) => {
-      t.addEventListener('click', () => switchSettingsTab(t.dataset.tab));
-    });
 
     // 分段按钮（点击即时写入 state.data.site）
     document.querySelectorAll('.seg-btn').forEach((b) => {
@@ -597,10 +532,6 @@
 
     // 功能图标
     $('#addFuncIcon').addEventListener('click', addFuncIcon);
-
-    // AI 配置
-    $('#setSaveCfg').addEventListener('click', saveSettingsCfg);
-    $('#setClearPwd').addEventListener('click', clearSettingsPwd);
   }
 
   /* ---------- 主题 ---------- */
@@ -651,5 +582,6 @@
     try { state.password = sessionStorage.getItem('adminPwd') || ''; } catch (e) {}
     if (state.protected && !state.password) await showLogin();
     await loadData();
+    populateSettings();
   });
 })();
