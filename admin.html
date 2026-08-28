@@ -344,6 +344,15 @@
         <label class="hint">值（图片 URL / 渐变 CSS / 颜色值）</label>
         <input type="text" id="setWallpaperValue" placeholder="例如 https://…  或  linear-gradient(120deg,#2f6fed,#1aa179)  或  #f5f7fa" />
         <div class="settings-row">
+          <span class="srl">本地图片</span>
+          <div class="wp-up" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn sm ghost" id="wallpaperUploadBtn" title="从本地选择一张图片作为壁纸">📁 选择本地图片</button>
+            <input type="file" id="wallpaperUploadFile" accept="image/*" style="display:none"/>
+            <span id="wallpaperUploadStatus" class="hint"></span>
+            <img id="wallpaperPreview" alt="壁纸预览" style="display:none;width:48px;height:48px;border-radius:8px;object-fit:cover;border:1px solid var(--border)"/>
+          </div>
+        </div>
+        <div class="settings-row">
           <span class="srl">遮罩透明度</span>
           <input type="range" id="setWallpaperOpacity" min="0" max="1" step="0.05" />
           <span id="setWallpaperOpacityVal" class="hint" style="min-width:42px;text-align:right">0.08</span>
@@ -353,7 +362,7 @@
           <input type="range" id="setWallpaperBlur" min="0" max="20" />
           <span id="setWallpaperBlurVal" class="hint" style="min-width:32px;text-align:right">0</span>
         </div>
-        <p class="settings-hint">提示：在「① 导航数据管理」里给链接上传图标后，把返回的 <code>/uploads/…</code> 粘到这里即可用本地图片作壁纸。</p>
+        <p class="settings-hint">提示：点上方「📁 选择本地图片」可直接上传本地图片作壁纸，上传后自动切到「图片」类型并填好地址；也可手动粘贴图片 URL / 渐变 CSS / 颜色值。上传的图片存于 <code>uploads/</code>（Cloudflare 下为 R2），随「💾 保存」生效。</p>
       </div>
     </div>
 

@@ -532,6 +532,28 @@
 
     // 功能图标
     $('#addFuncIcon').addEventListener('click', addFuncIcon);
+
+    // 壁纸本地上传
+    $('#wallpaperUploadBtn').addEventListener('click', () => $('#wallpaperUploadFile').click());
+    $('#wallpaperUploadFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const st = $('#wallpaperUploadStatus'); const prev = $('#wallpaperPreview');
+      st.textContent = '上传中…'; prev.style.display = 'none';
+      try {
+        const url = await uploadImage(file);
+        $('#setWallpaperValue').value = url;
+        // 自动切到「图片」类型并写回 state.data.site
+        state.data.site = state.data.site || {};
+        state.data.site.wallpaperType = 'image';
+        state.data.site.wallpaperValue = url;
+        document.querySelectorAll('.seg-btn[data-key="wallpaperType"]').forEach((x) => x.classList.toggle('on', x.dataset.val === 'image'));
+        state.dirty = true; updateSaved();
+        st.textContent = '✓ 已上传并设为壁纸';
+        prev.src = url; prev.style.display = 'inline-block';
+        $('#settingsSaveStatus').textContent = '✓ 已写入内存，点「① 导航数据管理」的「💾 保存」即可生效';
+      } catch (err) { st.textContent = '上传失败：' + err.message; }
+      e.target.value = '';
+    });
   }
 
   /* ---------- 主题 ---------- */
