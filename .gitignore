@@ -22,3 +22,13 @@ node_modules/
 # ── 环境变量 ──
 .env
 .env.local
+
+# ── Wrangler 本地配置 ──
+# 仓库内一旦出现 wrangler.toml / wrangler.json / wrangler.jsonc，Cloudflare Pages
+# 就会禁用后台的 KV / R2 绑定界面（提示 "managed through wrangler.toml"）。
+# 本项目选择在【Cloudflare 后台】管理绑定，故这些文件一律不入库。
+# 本地开发请复制 `wrangler.toml.example` 为 `wrangler.toml`（会自动被此处忽略）。
+# 注意：.wranglerignore 需要入库（部署时排除敏感文件），不要一起忽略。
+wrangler.toml
+wrangler.json
+wrangler.jsonc

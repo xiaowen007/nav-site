@@ -1,0 +1,39 @@
+# 共享导航 - Wrangler 配置【模板】
+#
+# ⚠️ 为什么是 .example？
+#   只要仓库里存在 wrangler.toml / wrangler.json / wrangler.jsonc，
+#   Cloudflare Pages 就会认定「绑定由该文件管理」，并禁用后台 Settings → Functions 的
+#   KV / R2 绑定界面（提示：Bindings for this project are being managed through wrangler.toml）。
+#   本项目选择【在 Cloudflare 后台管理绑定】，因此仓库内不放真正的 wrangler.toml，
+#   只保留本模板供本地开发使用。
+#
+# ── 本地开发怎么用 ──────────────────────────────
+#   cp wrangler.toml.example wrangler.toml     # 复制到本地（已被 .gitignore 忽略，不会误提交）
+#   npx wrangler pages dev
+# ──────────────────────────────────────────
+#
+# ── 生产环境配置（在 Cloudflare 后台完成，详见 CLOUDFLARE.md）──────
+#   1. Settings → Builds & deployments
+#        Build command：留空
+#        Build output directory：.（点号 = 仓库根目录）
+#   2. Settings → Functions → KV namespace bindings → Add
+#        Variable name：NAV_KV → 选择你的 KV 命名空间
+#   3. Settings → Functions → R2 buckets bindings → Add
+#        Variable name：NAV_R2 → 选择桶 nav-site-uploads
+#   4. 绑定改动后【必须重新部署】才生效（Deployments → Redeploy）。
+# ───────────────────────────────────────────────
+
+name = "nav-site"
+compatibility_date = "2024-11-01"
+
+# 以下绑定仅供本地开发（wrangler pages dev）使用；生产绑定以 Cloudflare 后台为准。
+
+# 导航数据 + 配置存储（替代本地 data/sites.json / config.json）
+[[kv_namespaces]]
+binding = "NAV_KV"
+id = "3dd2c0201c3b478f9b43b424927fb9fc"
+
+# 上传的图标/图片存储（替代本地 uploads/）
+[[r2_buckets]]
+binding = "NAV_R2"
+bucket_name = "nav-site-uploads"

@@ -27,19 +27,23 @@ npx wrangler r2 bucket create nav-site-uploads
 
 ### ✅ 绑定在哪管理：Cloudflare 后台（可随时增删改）
 
-本项目**选择在 Cloudflare 后台管理 KV / R2 绑定**，因此仓库里的 `wrangler.toml` **故意不写** `pages_build_output_dir`。
+本项目选择在**Cloudflare 后台**管理 KV / R2 绑定，因此仓库里**不放任何 wrangler 配置文件**。
 
-官方规则（Pages Functions → Wrangler configuration）：
+Cloudflare Pages 的规则（实测 + 官方文档）：
 
-| `wrangler.toml` 是否含 `pages_build_output_dir` | 生产配置来源 | 后台绑定界面 |
+| 仓库里是否有 wrangler 配置文件 | 生产配置来源 | 后台 Settings → Functions 绑定界面 |
 | --- | --- | --- |
-| **含** | 以 wrangler.toml 为唯一来源 | 被禁用，提示 "managed through wrangler.toml" |
-| **不含**（本项目） | 以 Cloudflare 后台为准 | ✅ 可正常增删改 |
+| **有** `wrangler.toml` / `wrangler.json` / `wrangler.jsonc` | 以该文件为唯一来源 | ❌ **被禁用**，提示"此项目的绑定通过 wrangler.toml 进行管理"，无法增删 |
+| **没有**（本项目） | 以 Cloudflare 后台为准 | ✅ **可正常增删改** |
 
-所以在你的后台里，Settings → Functions 的 KV / R2 绑定是**可以直接编辑的**，无需改代码、无需动 `wrangler.toml`。
+> ⚠️ 实测结论：**仅删除 `pages_build_output_dir` 不足以解除锁定**——只要文件还在，Cloudflare 就会继续
+> 显示"managed through wrangler.toml"并禁用界面。必须让仓库里**根本不存在**这些文件。
 
-> `wrangler.toml` 里保留的 `[[kv_namespaces]]` / `[[r2_buckets]]` 仅用于**本地开发**（`wrangler pages dev`），
-> 不会影响线上。
+因此本仓库的做法是：
+
+- **不提交** `wrangler.toml`（已加入 `.gitignore`），只提供模板 `wrangler.toml.example`。
+- 模板里的 `[[kv_namespaces]]` / `[[r2_buckets]]` 仅用于**本地开发**（`wrangler pages dev`），不影响线上。
+- 本地开发：`cp wrangler.toml.example wrangler.toml` 后 `npx wrangler pages dev`（该文件已被 gitignore，不会误提交）。
 
 ⚠️ 两个必须知道的点：
 
@@ -47,7 +51,8 @@ npx wrangler r2 bucket create nav-site-uploads
 - **`Build output directory` 必须在后台设置**：因为不再由 wrangler.toml 提供，需到
   Settings → Builds & deployments 确认 **Build output directory = `.`**（点号），否则部署后站点无内容。
 
-> 若你更想用 `wrangler.toml` 管理绑定，把 `pages_build_output_dir = "."` 加回该文件即可（后台界面会随之禁用）。
+> 若你更想改用 `wrangler.toml` 管理绑定：把 `wrangler.toml.example` 复制为 `wrangler.toml`、加上
+> `pages_build_output_dir = "."`、并从 `.gitignore` 移除该行即可（后台界面会随之禁用）。
 
 ## 三、部署（两种方式选其一）
 
@@ -60,9 +65,9 @@ npm run deploy     # = npx wrangler pages deploy .
 
 按提示创建 Pages 项目即可。
 
-> 命令行部署（Direct Upload）会读取 `wrangler.toml` 里的绑定用于本地/直传；
-> 但**正式站点的绑定以 Cloudflare 后台为准**（见方式 B 第 4–5 步）。
-> 由于本仓库不含 `pages_build_output_dir`，`wrangler pages deploy` 会提示字段缺失并仅将其用于本地开发，属正常。
+> 用命令行直传（Direct Upload）前，先 `cp wrangler.toml.example wrangler.toml`，
+> 这样 wrangler 能读到绑定并直传；但**正式站点的绑定仍以 Cloudflare 后台为准**（见方式 B 第 4–6 步）。
+> 仓库内不含 wrangler 配置时，`wrangler pages deploy` 会提示字段缺失，属正常（不影响 Git 连接部署）。
 
 ### 方式 B：连接 GitHub 自动部署（推荐长期）
 
@@ -166,8 +171,10 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
   「⚠️ 存储未绑定 NAV_KV，保存不可用，请在 Cloudflare 后台绑定后重新部署」。
 - 横幅出现即表示代码里 `env.NAV_KV` 为空（只读降级模式），按下面顺序排查：
   1. 到 **Settings → Functions → KV namespace bindings** 确认绑定已添加，变量名**完全等于** `NAV_KV`。
-     - 若界面顶部显示 `Bindings for this project are being managed through wrangler.toml` → 说明
-       `wrangler.toml` 里存在 `pages_build_output_dir`，后台被禁用。把该字段删掉即可恢复后台管理。
+     - 若界面显示「此项目的绑定通过 wrangler.toml 进行管理」且无法增删改 → **仓库里仍存在 wrangler 配置文件**。
+       实测：只删掉 `pages_build_output_dir` **不够**，必须让仓库中不存在
+       `wrangler.toml` / `wrangler.json` / `wrangler.jsonc`（本仓库已移除并加入 `.gitignore`）。
+       移除后**重新部署一次**，界面即恢复可编辑。
   2. 确认选中的 KV 命名空间在**同一个 Cloudflare 账号**下。
   3. 确认 **R2 桶 `nav-site-uploads` 真实存在**（R2 → 桶列表），并在
      Settings → Functions → R2 buckets bindings 绑定为 `NAV_R2`（桶不存在会导致部署失败）。
@@ -191,5 +198,8 @@ functions/
   api/config.js      # GET/POST 配置
   api/auth/          # 鉴权子目录：index(状态)/login/logout/setup/verify
   uploads/[name].js  # GET 从 R2 提供上传文件
-wrangler.toml        # Pages + KV + R2 绑定配置
+wrangler.toml.example # 仅本地开发模板（不入库为 wrangler.toml，以免禁用后台绑定界面）
+.wranglerignore      # 部署时排除 config.json / node_modules / scripts / .git
 ```
+
+> 仓库内**不应存在** `wrangler.toml`（已在 `.gitignore` 中）。若出现，Cloudflare 会禁用后台绑定界面。
