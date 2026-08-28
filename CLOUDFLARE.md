@@ -61,6 +61,31 @@ npm run deploy     # = npx wrangler pages deploy .
 - 之后在**后台**（`/admin.html`）的增删改、排序、分类图标、访问统计都会持久化到 KV / R2。
 - 想重新用本地 `data/sites.json` 覆盖线上数据：在后台点“导出 JSON”拿到最新数据，或清理 KV 键 `sites` 后重新访问即重新播种。
 
+## 设置后台管理员密码
+
+后台 `/admin.html` 需要账号密码才能登录（关闭了开放后台）。密码保护**真正生效的前提是先绑定 `NAV_KV`**——代码里未绑定 KV 时 `requireAuth` 直接放行（开放只读），此时设了密码也不会被校验，只是写操作会返回 503。
+
+### 方式一：首次打开后台初始化（推荐）
+1. 浏览器打开 `https://你的域名/admin.html`。
+2. 全新部署时 KV 里还没有密码，`GET /api/auth` 返回 `configured:false`，页面自动弹出「初始化管理员账号」界面。
+3. 填：管理员账号（≥2 字符，如 `admin`）、密码（≥6 位）、确认密码。
+4. 确定 → `POST /api/auth/setup` 把账号密码写入 KV；之后用该账号密码登录，可勾选「记住 7 天」。
+
+### 方式二：用 Cloudflare 环境变量 / Secret 预设（不用走初始化）
+- Cloudflare Dashboard → 项目 **Settings → Variables and Secrets**（或 Functions 变量）添加：
+  - `ADMIN_USER`（明文变量，如 `admin`）
+  - `ADMIN_PASSWORD`（**设为 Secret 类型**，值填密码）
+- 代码中 `env.ADMIN_PASSWORD` 优先级**高于** KV 中存的密码，设好即生效，直接登录即可；可随时轮换 Secret 而不动代码。详见下一节。
+
+### 方式三：登录后在后台改密码
+已登录后，后台顶栏「👤 账号」区可改密码（保存到 KV，同样要求 `NAV_KV` 已绑定）。
+
+### 常见坑
+- 没绑 `NAV_KV` 就点初始化 → 报 `503 存储未绑定 NAV_KV`，先去后台绑定再试。
+- 未绑 KV 却设了 env 密码 → 登录界面可能显示，但 `requireAuth` 因无 KV 直接放行，等于没保护；务必先绑 KV。
+- `env` 密码与初始化密码并存时，env 优先，登录用 env 那套。
+- 账号 < 2 字符或密码 < 6 位 → 初始化被拒（400）。
+
 ## 五、可选：用密钥保护配置（更安全）
 
 后台“系统设置”里填的 `AI_API_KEY` / `ADMIN_PASSWORD` 会存进 KV。
