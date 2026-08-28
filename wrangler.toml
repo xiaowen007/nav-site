@@ -9,7 +9,7 @@ compatibility_date = "2024-11-01"
 # 导航数据 + 配置存储（替代本地 data/sites.json / config.json）
 [[kv_namespaces]]
 binding = "NAV_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "3dd2c0201c3b478f9b43b424927fb9fc"
 
 # 上传的图标/图片存储（替代本地 uploads/）
 [[r2_buckets]]
