@@ -83,6 +83,35 @@ npx wrangler secret put AI_API_KEY
 npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 ```
 
+## 八、更新代码后重新部署 & 常见问题排查
+
+### 更新代码后如何触发新部署
+- **方式 B（GitHub 连接）**：Cloudflare 在每次 `git push` 到 `main` 后**自动重新构建部署**。流程：本地改完 → `git push` → 在 Dashboard → Deployments 看新构建进度/日志，跑完即上线。
+- 代码没变却想重跑：Dashboard → Deployments 点 **Redeploy** 手动触发。
+- ⚠️ 部署拉的是**远程仓库最新提交**。本地改了没 `push`，Cloudflare 拉不到。提交前用 `git status` / `git log` 确认本地与远程 tip 一致。
+
+### 部署报错 Failed building Pages Functions（两个真实踩过的坑）
+**坑 A：同层文件与目录不能同名**
+- 现象：`Failed building Pages Functions` / `generating Pages Functions failed`，日志无明显模块错误。
+- 根因：Cloudflare Pages Functions 硬限制——`functions/api/` 下**文件与目录不能同名**。如同时存在 `functions/api/auth.js`（文件）和 `functions/api/auth/`（目录）会直接失败。
+- 修复：合并为目录入口，把 `auth.js` 改为 `functions/api/auth/index.js`（保留 `GET /api/auth`），并删除原 `auth.js`。
+- 排查：`find functions -name '*.js' | sed 's#/[^/]*$##' | sort -u` 列出所有目录，再 `ls functions/api` 看是否有同名 `.js` 文件。
+
+**坑 B：共享模块 `_lib.js` 的相对 import 路径层级**
+- 现象：`Could not resolve "../../../_lib.js"`（或 `../../_lib.js`），esbuild 打包阶段报多个错误。
+- 根因：共享逻辑在 `functions/_lib.js`。Functions 内各文件引用它的相对路径，**`../` 的层数必须等于「该文件所在目录 → functions/ 的层数」**，多一级或少一级都找不到：
+  - `functions/api/X.js` → `../_lib.js`（api→functions 一级）
+  - `functions/api/auth/X.js` → `../../_lib.js`（auth→api→functions 两级）
+  - `functions/api/auth/sub/X.js` → `../../../_lib.js`（三级，以此类推）
+  - `functions/uploads/X.js` → `../_lib.js`（uploads→functions 一级）
+- 注意：`node --check` 只校验语法，**发现不了**路径层级错误；必须用 `node` 实际 `import()` 该文件才能验证。
+- 修复：按上表把对应层级的 `../` 数量改对即可。
+
+### 部署成功但首页异常
+- 若提示「存储未绑定：NAV_KV / NAV_R2」→ 属预期（未绑定 KV/R2 时写操作返回 503），按「方式 B 第 4–5 步」到后台绑定即可，绑定后刷新生效、无需重新部署。
+- 若已绑定仍 503 → 检查变量名是否**完全为** `NAV_KV` / `NAV_R2`。
+- 其他异常先看 Dashboard → Logs / 部署日志。
+
 ## 目录说明
 
 ```
@@ -95,6 +124,7 @@ functions/
   api/upload.js      # POST 上传图片 -> R2
   api/visit.js       # POST 访问统计
   api/config.js      # GET/POST 配置
+  api/auth/          # 鉴权子目录：index(状态)/login/logout/setup/verify
   uploads/[name].js  # GET 从 R2 提供上传文件
 wrangler.toml        # Pages + KV + R2 绑定配置
 ```
