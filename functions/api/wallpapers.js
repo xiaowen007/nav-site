@@ -1,6 +1,6 @@
 // GET /api/wallpapers?source=bing|360|wallhaven&page=1&q=关键词
 // 在线壁纸库：服务端（Worker）代理抓取，规避浏览器 CORS 限制（需登录）
-import { sendJSON, requireAuth } from '../../_lib.js';
+import { sendJSON, requireAuth } from '../_lib.js';
 
 async function fetchJSON(url) {
   const controller = new AbortController();

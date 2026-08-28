@@ -1,5 +1,5 @@
 // POST /api/auth/setup -> 首次初始化管理员账号（仅在尚未设置密码时可用）
-import { loadConfig, saveConfig, sendJSON, readBody, issueToken } from '../../../_lib.js';
+import { loadConfig, saveConfig, sendJSON, readBody, issueToken } from '../../_lib.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;

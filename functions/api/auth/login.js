@@ -1,5 +1,5 @@
 // POST /api/auth/login -> 账号 + 密码登录，成功后返回 HMAC 签名会话 token
-import { loadConfig, sendJSON, readBody, issueToken } from '../../../_lib.js';
+import { loadConfig, sendJSON, readBody, issueToken } from '../../_lib.js';
 
 // 轻量防爆破：仅作用于单个边缘 isolate 内存；生产级限流建议改用 KV / Durable Object / WAF 规则
 const ATTEMPTS = new Map();

@@ -1,5 +1,5 @@
 // GET /api/auth/verify -> 校验当前会话 token 是否有效
-import { sendJSON, verifyTokenRaw, tokenFromRequest } from '../../../_lib.js';
+import { sendJSON, verifyTokenRaw, tokenFromRequest } from '../../_lib.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
