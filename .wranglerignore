@@ -1,0 +1,8 @@
+# 部署时不上传这些文件（防止敏感信息/本地文件泄露到公开站点）
+config.json
+node_modules
+.git
+.wrangler
+scripts
+.workspace
+*.log
