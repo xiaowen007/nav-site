@@ -714,6 +714,136 @@
     renderSections();
     applySettings();
     updateFavCount();
+    initWeather();
+    initCalendar();
+  }
+
+  /* ===== 天气模块（主页左上角） ===== */
+  const WMO = {
+    0: ['☀️', '晴'], 1: ['🌤️', '晴间多云'], 2: ['⛅', '多云'], 3: ['☁️', '阴'],
+    45: ['🌫️', '雾'], 48: ['🌫️', '雾'],
+    51: ['🌦️', '毛毛雨'], 53: ['🌦️', '毛毛雨'], 55: ['🌦️', '毛毛雨'],
+    56: ['🌧️', '冻雨'], 57: ['🌧️', '冻雨'],
+    61: ['🌧️', '小雨'], 63: ['🌧️', '中雨'], 65: ['🌧️', '大雨'],
+    66: ['🌧️', '冻雨'], 67: ['🌧️', '冻雨'],
+    71: ['🌨️', '小雪'], 73: ['🌨️', '中雪'], 75: ['❄️', '大雪'], 77: ['❄️', '雪粒'],
+    80: ['🌦️', '阵雨'], 81: ['🌦️', '阵雨'], 82: ['⛈️', '强阵雨'],
+    85: ['🌨️', '阵雪'], 86: ['🌨️', '阵雪'],
+    95: ['⛈️', '雷阵雨'], 96: ['⛈️', '雷阵雨伴冰雹'], 99: ['⛈️', '雷阵雨伴冰雹']
+  };
+  function wmoInfo(code) { return WMO[code] || ['🌡️', '未知']; }
+
+  function renderWeather(city, temp, code) {
+    const [icon, desc] = wmoInfo(code);
+    const el = document.getElementById('weatherCard');
+    if (!el) return;
+    el.innerHTML =
+      '<div class="mw-row"><span class="mw-icon">' + icon + '</span>' +
+      '<span class="mw-temp">' + Math.round(temp) + '°</span></div>' +
+      '<div class="mw-meta"><span class="mw-city">' + escapeHtml(city || '本地') + '</span>' +
+      '<span class="mw-desc">' + desc + '</span></div>';
+  }
+  function renderWeatherError(msg) {
+    const el = document.getElementById('weatherCard');
+    if (el) el.innerHTML = '<div class="mini-loading">🌤️ ' + escapeHtml(msg || '天气获取失败') + '</div>';
+  }
+  async function fetchWeather(lat, lon) {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
+      '&current=temperature_2m,weather_code&timezone=auto';
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('weather ' + r.status);
+    const j = await r.json();
+    const cur = j.current || {};
+    return { temp: cur.temperature_2m, code: cur.weather_code };
+  }
+  async function fetchCityName(lat, lon) {
+    try {
+      const r = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lon + '&localityLanguage=zh');
+      if (r.ok) {
+        const j = await r.json();
+        return j.city || j.locality || j.principalSubdivision || '';
+      }
+    } catch (e) {}
+    return '';
+  }
+  function readWeatherCache() {
+    try {
+      const o = JSON.parse(localStorage.getItem('nav_weather'));
+      if (o && Date.now() - o.ts < 600000) return o;
+    } catch (e) {}
+    return null;
+  }
+  function writeWeatherCache(o) {
+    try { o.ts = Date.now(); localStorage.setItem('nav_weather', JSON.stringify(o)); } catch (e) {}
+  }
+  async function initWeather() {
+    try {
+      const cached = readWeatherCache();
+      if (cached) renderWeather(cached.city, cached.temp, cached.code);
+      let lat = null, lon = null, city = '';
+      if (navigator.geolocation) {
+        const pos = await new Promise((res, rej) => {
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000, maximumAge: 600000 });
+        });
+        lat = pos.coords.latitude; lon = pos.coords.longitude;
+        city = await fetchCityName(lat, lon);
+      }
+      if (lat == null) {
+        const ip = await fetch('https://ipapi.co/json/').then((r) => r.json());
+        lat = ip.latitude; lon = ip.longitude; city = ip.city || '';
+      }
+      const w = await fetchWeather(lat, lon);
+      renderWeather(city, w.temp, w.code);
+      writeWeatherCache({ city: city, temp: w.temp, code: w.code });
+    } catch (e) {
+      const el = document.getElementById('weatherCard');
+      if (el && !el.querySelector('.mw-temp')) renderWeatherError('天气不可用');
+    }
+  }
+
+  /* ===== 万年历 / 节气（主页左上角） ===== */
+  function pickFestival(f) {
+    if (!f) return '';
+    if (Array.isArray(f)) return f.filter(Boolean).join('、');
+    if (typeof f === 'object') return Object.values(f).filter(Boolean).join('、');
+    return String(f);
+  }
+  function renderCalendar(info) {
+    const el = document.getElementById('calendarCard');
+    if (!el) return;
+    const d = new Date();
+    const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+    const solar = (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + wd;
+    const lunar = info.lunar || '';
+    const jieqi = info.jieqi || '';
+    const festival = pickFestival(info.festival);
+    let greet = '';
+    if (festival) greet = festival + '快乐 🎉';
+    else if (jieqi) greet = '今日' + jieqi;
+    let sub = lunar;
+    if (jieqi) sub = (lunar ? lunar + ' · ' : '') + jieqi;
+    if (festival) sub = (sub ? sub + ' · ' : '') + festival;
+    el.innerHTML =
+      '<div class="mc-solar">' + solar + '</div>' +
+      '<div class="mc-sub">' + escapeHtml(sub || '') + '</div>' +
+      (greet ? '<div class="mc-greet">' + escapeHtml(greet) + '</div>' : '');
+  }
+  async function initCalendar() {
+    try {
+      // 内置农历/节气/节日计算，不依赖外部 API（离线可用、无 CORS 问题）
+      const info = (window.NavLunar && window.NavLunar.info)
+        ? window.NavLunar.info(new Date())
+        : null;
+      if (info) { renderCalendar(info); return; }
+    } catch (e) { /* 落到下方兜底 */ }
+    // 兜底：仅显示公历
+    const el = document.getElementById('calendarCard');
+    if (el) {
+      const d = new Date();
+      const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+      el.innerHTML = '<div class="mc-solar">' + (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + wd +
+        '</div><div class="mc-sub">📅 农历获取失败</div>';
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);

@@ -41,6 +41,14 @@
   <div class="layout">
     <!-- 左侧导航栏 -->
     <aside class="sidebar" id="sidebar">
+      <div class="mini-panel" id="miniPanel">
+        <div class="mini-card mini-weather" id="weatherCard">
+          <div class="mini-loading">🌤️ 定位中…</div>
+        </div>
+        <div class="mini-card mini-calendar" id="calendarCard">
+          <div class="mini-loading">📅 加载中…</div>
+        </div>
+      </div>
       <nav class="side-nav" id="sideNav">
         <a class="side-item fav-entry" data-target="__fav" href="#__fav">⭐ 常用收藏 <span class="fav-count" id="favCount">0</span></a>
         <a class="side-item active" data-target="all" href="#all">🏠 全部</a>
@@ -71,6 +79,7 @@
       } catch (e) {}
     })();
   </script>
+  <script src="js/lunar.js?v=20260829"></script>
   <script src="js/app.js?v=20260829"></script>
 </body>
 </html>
