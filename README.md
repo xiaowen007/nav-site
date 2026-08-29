@@ -196,6 +196,29 @@ GitHub 仅托管代码，要让别人通过网址访问需部署到支持 Node.j
   - ⚠️ KV / R2 绑定在 **Cloudflare 后台**管理：部署后到 **Settings → Functions** 添加 `NAV_KV`（KV 命名空间）与 `NAV_R2`（R2 桶 `nav-site-uploads`），**并重新部署一次**才会生效。
   - ⚠️ 随后到 `/admin.html` **设置后台管理员密码**（详见 [CLOUDFLARE.md](./CLOUDFLARE.md)「设置后台管理员密码」），否则后台为只读开放、密码保护不生效。
 
+### Cloudflare Pages 部署后速查（绑定 → 重部署 → 保存 → 主页验证）
+
+```mermaid
+flowchart TD
+    A["① 绑定 NAV_KV<br/>Settings → Functions → KV bindings<br/>变量名必须 = NAV_KV"] --> B["② 重新部署<br/>Deployments → Redeploy"]
+    B --> C["③ 打开 /admin.html<br/>首次初始化 / 已设密码登录"]
+    C --> G["④ 编辑 → 点顶栏「保存全部」<br/>POST /api/sites 写入 KV"]
+    G --> I["⑤ 打开首页 / 强刷 Ctrl+F5"]
+    I --> J{"首页 GET /api/sites<br/>显示更新内容?"}
+    J -- "是" --> K["✅ 同步成功"]
+    J -- "否" --> L["排查：变量名 / Redeploy / 缓存"]
+    L -. "回到" .-> A
+
+    style A fill:#e8f0fe,stroke:#4285f4
+    style B fill:#fff4e5,stroke:#f9a825
+    style G fill:#e6f4ea,stroke:#1aa179
+    style I fill:#e6f4ea,stroke:#1aa179
+    style K fill:#1aa179,stroke:#0d7a5a,color:#fff
+    style L fill:#fdecea,stroke:#e8543f
+```
+
+> 完整说明与排查见 [CLOUDFLARE.md](./CLOUDFLARE.md)「九、速查清单」。
+
 ---
 
 ## 许可证
