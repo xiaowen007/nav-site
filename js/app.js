@@ -1,5 +1,7 @@
 /* 共享导航 - 前端逻辑
- * 数据来源：data/sites.json（由后端 /api/save 写入，或直接手动编辑）
+ * 数据来源：在线优先读后端 /api/sites（与后台管理同源，保证实时同步；
+ *          Cloudflare 走 KV、本地 server.js 走 data/sites.json）；
+ *          file:// 直接打开或后端不可用时，回落 data/sites.json → data/sites.js 兜底。
  */
 (() => {
   'use strict';
@@ -108,14 +110,25 @@
   }
 
   async function fetchSiteData() {
+    const isOnline = location.protocol === 'http:' || location.protocol === 'https:';
+    // 在线环境优先读后端 /api/sites（Cloudflare 走 KV、本地 server.js 走 data/sites.json），
+    // 与后台管理写入的是同一份数据，保证前台展示与后台修改实时同步。
+    if (isOnline) {
+      try {
+        const res = await fetch('/api/sites?t=' + Date.now(), { cache: 'no-store' });
+        if (res.ok) return await res.json();
+      } catch (e) {
+        // /api/sites 不可用（如未部署 Functions）→ 落到下方静态兜底
+      }
+    }
+    // file:// 直接打开，或 /api/sites 不可用时，读静态文件兜底
     try {
       const res = await fetch('data/sites.json?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.json();
+      if (res.ok) return await res.json();
     } catch (e) {
-      // fetch 失败（典型场景：file:// 协议）→ 退回脚本标签读取
-      return await loadDataViaScript();
+      // fetch 被拦截（file://）→ 退回脚本标签读取
     }
+    return await loadDataViaScript();
   }
 
   async function loadData() {
