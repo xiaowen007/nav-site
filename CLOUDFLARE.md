@@ -184,6 +184,49 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 - 只想让首页可浏览、暂不保存：未绑定 KV 时首页本就以只读种子数据正常展示，不影响访问。
 - 其他异常先看 Dashboard → Logs / 部署日志。
 
+## 九、速查清单：绑定 → 重部署 → 后台保存 → 主页验证
+
+一键照着走的四步流程（任何一步卡住，顺着箭头回到对应排查点）：
+
+```mermaid
+flowchart TD
+    A["① 绑定 NAV_KV<br/>Settings → Functions → KV bindings<br/>变量名必须 = NAV_KV"] --> B["② 重新部署<br/>Deployments → Redeploy<br/>（绑定改动必须重部署才生效）"]
+    B --> C["③ 打开 /admin.html"]
+    C --> D{"KV 里已有密码?"}
+    D -- "否（首次）" --> E["初始化管理员账号<br/>账号≥2 / 密码≥6"]
+    D -- "是" --> F["输入账号密码登录"]
+    E --> G["④ 编辑内容 → 点顶栏「保存全部」"]
+    F --> G
+    G --> H["POST /api/sites<br/>数据写入 KV"]
+    H --> I["⑤ 打开首页 / 强刷 Ctrl+F5"]
+    I --> J{"首页 GET /api/sites<br/>显示更新内容?"}
+    J -- "是" --> K["✅ 同步成功"]
+    J -- "否" --> L["排查：变量名是否 NAV_KV /<br/>是否 Redeploy / 浏览器缓存"]
+    L -. "回到" .-> A
+
+    style A fill:#e8f0fe,stroke:#4285f4
+    style B fill:#fff4e5,stroke:#f9a825
+    style G fill:#e6f4ea,stroke:#1aa179
+    style I fill:#e6f4ea,stroke:#1aa179
+    style K fill:#1aa179,stroke:#0d7a5a,color:#fff
+    style L fill:#fdecea,stroke:#e8543f
+```
+
+### 文字版清单（复制备用）
+
+1. **绑定**：Dashboard → Workers & Pages → nav-site → **Settings → Functions → KV namespace bindings → Add**
+   - Variable name = `NAV_KV`（区分大小写，错一字即失效）
+   - 选你的 KV 命名空间（id `3dd2c020…`）
+   - 同页加 **R2 buckets bindings**：Variable name = `NAV_R2`，桶 = `nav-site-uploads`
+2. **重部署**：**Deployments → Redeploy**（绑定改动必须重部署，只刷新页面无效）
+3. **登录/初始化**：开 `https://你的域名/admin.html`
+   - 首次 → 初始化管理员账号（账号≥2、密码≥6）
+   - 已设过 → 输账号密码登录
+4. **保存**：后台增删改 → 点顶栏 **「保存全部」** → 写入 KV
+5. **验证**：开首页 `/` → `Ctrl+F5` 强刷 → 应看到更新内容（F12 → Network 看 `GET /api/sites` 返回值）
+
+> 横幅「⚠️ 存储未绑定 NAV_KV」消失 = 绑定生效；仍显示 = 未绑上，回到第 1 步重核变量名。
+
 ## 目录说明
 
 ```
