@@ -10,7 +10,8 @@
     data: null,
     active: 'all',
     view: 'sections',
-    keyword: ''
+    keyword: '',
+    catCollapsed: {}   // 侧栏树形：已折叠的分类 id
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -160,18 +161,52 @@
     $('#sideFoot').textContent = (s.subtitle || '') + '\n数据：data/sites.json';
   }
 
+  /* ---------- 分类层级（支持 1~3 级） ---------- */
+  function kids(c) { return Array.isArray(c && c.children) ? c.children : []; }
+  function walkCats(list, fn, depth) {
+    (list || []).forEach((c) => {
+      fn(c, depth || 1);
+      if (kids(c).length) walkCats(kids(c), fn, (depth || 1) + 1);
+    });
+  }
+
   function buildSidebar() {
     const nav = $('#sideNav');
     // 保留“全部”按钮，注入分类
     nav.querySelectorAll('.side-item.cat').forEach((n) => n.remove());
-    state.data.categories.forEach((c) => {
-      const a = document.createElement('a');
-      a.className = 'side-item cat';
-      a.dataset.target = c.id;
-      a.href = '#' + c.id;
-      a.innerHTML = `<span>${catIconHtml(c.icon, 16)}</span><span class="lbl">${escapeHtml(c.name)}</span>`;
-      nav.appendChild(a);
-    });
+    // 递归构建可折叠树形：父级带展开/收起箭头，子级按层级缩进
+    (function buildLevel(list, depth) {
+      list.forEach((c) => {
+        const children = kids(c);
+        const a = document.createElement('a');
+        a.className = 'side-item cat lv' + depth + (children.length ? ' has-child' : '');
+        a.dataset.target = c.id;
+        a.href = '#' + c.id;
+        if (children.length) {
+          const collapsed = !!state.catCollapsed[c.id];
+          a.classList.toggle('collapsed', collapsed);
+          const arrow = document.createElement('span');
+          arrow.className = 'nav-arrow';
+          arrow.textContent = '▾';
+          arrow.title = '展开 / 收起子分类';
+          arrow.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            state.catCollapsed[c.id] = !state.catCollapsed[c.id];
+            buildSidebar();
+          });
+          a.appendChild(arrow);
+        }
+        const ico = document.createElement('span');
+        ico.innerHTML = catIconHtml(c.icon, 16);
+        a.appendChild(ico);
+        const lbl = document.createElement('span');
+        lbl.className = 'lbl';
+        lbl.textContent = c.name; // textContent 自动转义，避免注入
+        a.appendChild(lbl);
+        nav.appendChild(a);
+        if (children.length && !state.catCollapsed[c.id]) buildLevel(children, depth + 1);
+      });
+    })(state.data.categories, 1);
     nav.querySelectorAll('.side-item').forEach((item) => {
       item.addEventListener('click', (e) => {
         const t = item.dataset.target;
@@ -201,6 +236,8 @@
         closeSidebar();
       });
     });
+    // 展开/收起会重建整棵树，需恢复当前高亮
+    setActive(state.active || 'all');
   }
 
   /* 顶部导航模式（替代侧栏） */
@@ -212,8 +249,13 @@
     nav.className = 'top-nav' + (s.categoryArrangement === 'multi' ? ' multi' : '');
     nav.id = 'topNav';
     const allCls = 'top-nav-item';
-    nav.innerHTML = '<a class="' + allCls + '" data-target="all" href="#all">🏠 全部</a>' +
-      state.data.categories.map((c) => '<a class="' + allCls + '" data-target="' + c.id + '" href="#' + c.id + '">' + catIconHtml(c.icon, 16) + ' ' + escapeHtml(c.name) + '</a>').join('');
+    // 递归列出所有层级：1 级为主项，2/3 级缩进并略缩字号
+    const navItems = [];
+    walkCats(state.data.categories, (c, depth) => {
+      navItems.push('<a class="' + allCls + ' lv' + depth + '" data-target="' + escapeHtml(c.id) + '" href="#' + escapeHtml(c.id) + '">' +
+        catIconHtml(c.icon, depth === 1 ? 16 : 14) + ' ' + escapeHtml(c.name) + '</a>');
+    });
+    nav.innerHTML = '<a class="' + allCls + '" data-target="all" href="#all">🏠 全部</a>' + navItems.join('');
     layout.insertBefore(nav, layout.querySelector('.content'));
     nav.querySelectorAll('.' + allCls).forEach((a) => {
       a.addEventListener('click', (e) => {
@@ -395,13 +437,26 @@
   }
 
   /* 壁纸 */
+  // 兼容早期只填了壁纸值、没选类型的数据：按内容推断类型
+  function guessWallpaperType(v) {
+    if (!v) return 'none';
+    if (/gradient\(/i.test(v)) return 'gradient';
+    if (/^#[0-9a-f]{3,8}$/i.test(v) || /^rgba?\(/i.test(v)) return 'color';
+    return 'image';
+  }
   function applyWallpaper() {
     const s = state.data.site || {};
-    if (!s.wallpaperType || s.wallpaperType === 'none' || !s.wallpaperValue) return;
+    const val = (s.wallpaperValue || '').trim();
+    let type = s.wallpaperType || '';
+    if (!type && val) type = guessWallpaperType(val);
+    if (type === 'none' || !val) {
+      // 关闭/清空壁纸时主动清理，否则会残留上一次的壁纸
+      document.body.classList.remove('wallpaper');
+      ['--wp-bg', '--wp-opacity', '--wp-blur'].forEach((k) => document.body.style.removeProperty(k));
+      return;
+    }
     document.body.classList.add('wallpaper');
-    let bg = '';
-    if (s.wallpaperType === 'image') bg = 'url("' + s.wallpaperValue.replace(/"/g, '\\"') + '")';
-    else if (s.wallpaperType === 'gradient' || s.wallpaperType === 'color') bg = s.wallpaperValue;
+    const bg = type === 'image' ? 'url("' + val.replace(/"/g, '\\"') + '")' : val;
     document.body.style.setProperty('--wp-bg', bg);
     document.body.style.setProperty('--wp-opacity', s.wallpaperOpacity != null ? s.wallpaperOpacity : 0.08);
     document.body.style.setProperty('--wp-blur', (s.wallpaperBlur || 0) + 'px');
@@ -453,28 +508,48 @@
     const kw = state.keyword.trim().toLowerCase();
     let anyVisible = false;
 
-    state.data.categories.forEach((c) => {
+    // 递归构建：1 级分类是独立区块，2/3 级作为父区块内的子分组（各级都能有自己的链接）
+    function buildCatNode(c, depth) {
       const links = (c.links || []).filter((l) => {
         if (!kw) return true;
         return (l.name + ' ' + (l.desc || '') + ' ' + l.url + ' ' + c.name)
           .toLowerCase().includes(kw);
       });
-      if (links.length === 0) return;
-      anyVisible = true;
+      const subNodes = [];
+      let subCount = 0;
+      kids(c).forEach((k) => {
+        const node = buildCatNode(k, depth + 1);
+        if (node) { subNodes.push(node); subCount += node.count; }
+      });
+      // 自身与子孙都没有内容时整支隐藏（搜索无匹配同理）
+      if (links.length === 0 && subNodes.length === 0) return null;
 
-      const sec = document.createElement('section');
-      sec.className = 'section';
-      sec.id = 'sec-' + c.id;
-      sec.innerHTML = `
-        <div class="section-head">
-          <span class="sec-icon">${catIconHtml(c.icon, 20)}</span>
-          <span>${escapeHtml(c.name)}</span>
-          <span class="sec-count">${links.length}</span>
-        </div>
-        <div class="cards ${cardClasses(s)}" style="--card-radius:${s.cardRadius != null ? s.cardRadius : 14}px"></div>`;
-      const cards = sec.querySelector('.cards');
-      links.forEach((l) => cards.appendChild(buildCard(l)));
-      wrap.appendChild(sec);
+      const total = links.length + subCount;
+      const box = document.createElement(depth === 1 ? 'section' : 'div');
+      box.className = depth === 1 ? 'section' : ('subsection lv' + depth);
+      box.id = 'sec-' + c.id;
+
+      const head = document.createElement('div');
+      head.className = depth === 1 ? 'section-head' : ('sub-head lv' + depth);
+      head.innerHTML = '<span class="sec-icon">' + catIconHtml(c.icon, depth === 1 ? 20 : (depth === 2 ? 18 : 16)) + '</span>' +
+        '<span>' + escapeHtml(c.name) + '</span>' +
+        '<span class="sec-count">' + total + '</span>';
+      box.appendChild(head);
+
+      if (links.length) {
+        const cards = document.createElement('div');
+        cards.className = 'cards ' + cardClasses(s);
+        cards.style.setProperty('--card-radius', (s.cardRadius != null ? s.cardRadius : 14) + 'px');
+        links.forEach((l) => cards.appendChild(buildCard(l)));
+        box.appendChild(cards);
+      }
+      subNodes.forEach((n) => box.appendChild(n.el));
+      return { el: box, count: total };
+    }
+
+    state.data.categories.forEach((c) => {
+      const node = buildCatNode(c, 1);
+      if (node) { wrap.appendChild(node.el); anyVisible = true; }
     });
 
     if (!anyVisible) {
@@ -657,7 +732,8 @@
       });
     // 顶部偏移 = 顶栏 + 搜索引擎条，避免分类被吸顶元素盖住
     }, { rootMargin: '-' + (topOffset() + 20) + 'px 0px -70% 0px' });
-    document.querySelectorAll('.section[id^="sec-"]').forEach((el) => spyObserver.observe(el));
+    // 1 级是 .section，2/3 级是 .subsection，两者都带 sec- 前缀 id，需一并监听
+    document.querySelectorAll('[id^="sec-"]').forEach((el) => spyObserver.observe(el));
   }
 
   /* 搜索 */

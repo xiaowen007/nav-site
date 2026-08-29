@@ -14,6 +14,8 @@
     aiResults: [],
     filter: '',
     catModalEditId: null,
+    catModalParentId: '',   // 新增分类时的父分类 id（空 = 建在顶层）
+    catCollapsed: {},       // 后台分类树：已折叠的分类 id
     catUploadedIcon: '',
     sel: new Set(),          // 当前分类下已勾选的书签下标
     user: '',
@@ -260,7 +262,8 @@
   /* ================= 数据加载 ================= */
   async function loadData() {
     const d = await api('/api/sites', 'GET');
-    d.categories.forEach((c) => {
+    // 递归规范化：确保所有层级都有 id / links，兼容旧的扁平数据
+    walkCats(d.categories, (c) => {
       if (!c.id) c.id = slug(c.name || 'cat');
       c.links = c.links || [];
       c.links.forEach((l) => { if (l.visits == null) l.visits = 0; });
@@ -283,38 +286,118 @@
     return esc(icon || fallback);
   }
 
+  /* ---------- 分类层级工具（支持 1~3 级） ---------- */
+  const MAX_CAT_DEPTH = 3;
+  function kids(c) { return Array.isArray(c && c.children) ? c.children : []; }
+  // 深度优先遍历；回调返回 false 可跳过其子树
+  function walkCats(list, fn, parent, depth) {
+    (list || []).forEach((c) => {
+      const goDown = fn(c, parent || null, depth || 1);
+      if (goDown !== false && kids(c).length) walkCats(kids(c), fn, c, (depth || 1) + 1);
+    });
+  }
+  // 按 id 定位，返回 { cat, parent, siblings, index, depth } 或 null
+  function findCat(id) {
+    let hit = null;
+    walkCats(state.data.categories, (c, parent, depth) => {
+      if (hit) return false;
+      if (c.id === id) {
+        const siblings = parent ? kids(parent) : state.data.categories;
+        hit = { cat: c, parent, siblings, index: siblings.indexOf(c), depth };
+        return false;
+      }
+    });
+    return hit;
+  }
+  // 扁平化（带层级），供下拉框等使用
+  function flatCats() {
+    const out = [];
+    walkCats(state.data.categories, (c, parent, depth) => { out.push({ cat: c, depth }); });
+    return out;
+  }
+  // 含所有子孙的链接总数
+  function countLinksDeep(c) {
+    let n = (c.links || []).length;
+    kids(c).forEach((k) => { n += countLinksDeep(k); });
+    return n;
+  }
+  function countKidsDeep(c) {
+    let n = 0;
+    walkCats(kids(c), () => { n++; });
+    return n;
+  }
+  function allCatIds() {
+    const s = new Set();
+    walkCats(state.data.categories, (c) => { s.add(c.id); });
+    return s;
+  }
+  // id 是否为 node 的子孙（删除父分类后需重置选中项）
+  function isDescendant(id, node) {
+    let found = false;
+    walkCats(kids(node), (c) => { if (c.id === id) found = true; });
+    return found;
+  }
+
   function renderCats() {
     const list = $('#catList'); list.innerHTML = '';
-    state.data.categories.forEach((c) => {
-      const div = document.createElement('div');
-      div.className = 'cat-item' + (c.id === state.activeCatId ? ' active' : '');
-      div.draggable = true; div.dataset.cid = c.id;
-      div.innerHTML = `<span class="drag-handle">⋮⋮</span><span>${iconInner(c.icon, '🔗')}</span>
-        <span class="cname">${esc(c.name)}</span>
-        <span class="cact">
-          <button class="mini" data-act="rename" title="重命名/编辑">✎</button>
-          <button class="mini" data-act="del" title="删除">🗑</button>
-        </span>`;
-      div.addEventListener('click', (e) => {
-        if (e.target.dataset.act) {
-          e.stopPropagation();
-          if (e.target.dataset.act === 'rename') openCatModal(c); else deleteCat(c);
-          return;
-        }
-        if (state.activeCatId !== c.id) state.sel.clear();
-        state.activeCatId = c.id; renderCats(); renderLinks();
+    (function renderLevel(items, parent, depth) {
+      items.forEach((c) => {
+        const children = kids(c);
+        const collapsed = !!state.catCollapsed[c.id];
+        const div = document.createElement('div');
+        div.className = 'cat-item lv' + depth + (c.id === state.activeCatId ? ' active' : '');
+        div.draggable = true;
+        div.dataset.cid = c.id;
+        div.dataset.parent = parent ? parent.id : '';
+        div.dataset.depth = String(depth);
+        const arrow = children.length
+          ? '<span class="cat-arrow' + (collapsed ? ' collapsed' : '') + '" data-act="toggle" title="展开 / 收起">▾</span>'
+          : '<span class="cat-arrow placeholder"></span>';
+        const addChild = depth < MAX_CAT_DEPTH
+          ? '<button class="mini" data-act="addchild" title="添加子分类">＋</button>'
+          : '';
+        div.innerHTML = `<span class="drag-handle">⋮⋮</span>${arrow}<span>${iconInner(c.icon, '🔗')}</span>
+          <span class="cname">${esc(c.name)}</span>
+          <span class="lv-tag">${depth} 级</span>
+          <span class="cact">
+            ${addChild}
+            <button class="mini" data-act="rename" title="重命名/编辑">✎</button>
+            <button class="mini" data-act="del" title="删除">🗑</button>
+          </span>`;
+        div.addEventListener('click', (e) => {
+          const act = e.target.dataset.act;
+          if (act) {
+            e.stopPropagation();
+            if (act === 'toggle') { state.catCollapsed[c.id] = !collapsed; renderCats(); return; }
+            if (act === 'addchild') { openCatModal(null, c.id); return; }
+            if (act === 'rename') openCatModal(c); else deleteCat(c);
+            return;
+          }
+          if (state.activeCatId !== c.id) state.sel.clear();
+          state.activeCatId = c.id; renderCats(); renderLinks();
+        });
+        list.appendChild(div);
+        if (children.length && !collapsed) renderLevel(children, c, depth + 1);
       });
-      list.appendChild(div);
-    });
+    })(state.data.categories, null, 1);
     bindCatDrag();
     fillMoveTarget();
   }
 
-  function addCat() { openCatModal(null); }
+  function addCat() { openCatModal(null, ''); }
   function deleteCat(c) {
-    if (!confirm(`确定删除分类「${c.name}」及其 ${c.links.length} 个链接？`)) return;
-    state.data.categories = state.data.categories.filter((x) => x.id !== c.id);
-    if (state.activeCatId === c.id) state.activeCatId = state.data.categories[0]?.id || null;
+    const kidCount = countKidsDeep(c);
+    let msg = `确定删除分类「${c.name}」`;
+    if (kidCount) msg += ` 及其 ${kidCount} 个子分类`;
+    msg += `（共 ${countLinksDeep(c)} 个链接）？`;
+    if (!confirm(msg)) return;
+    const hit = findCat(c.id);
+    if (!hit) return;
+    hit.siblings.splice(hit.index, 1);
+    if (state.activeCatId === c.id || isDescendant(state.activeCatId, c)) {
+      state.activeCatId = state.data.categories[0] ? state.data.categories[0].id : null;
+    }
+    delete state.catCollapsed[c.id];
     state.sel.clear();
     state.dirty = true; renderCats(); renderLinks(); updateSaved();
   }
@@ -402,11 +485,19 @@
   }
 
   /* 分类编辑模态框（emoji / 上传 / 生成图片） */
-  function openCatModal(cat) {
+  function openCatModal(cat, parentId) {
     state.catModalEditId = cat ? cat.id : null;
+    // 新增时记录父分类 id；为空表示建在顶层
+    state.catModalParentId = cat ? '' : (parentId || '');
     state.catUploadedIcon = '';
     genSeed = 0;
-    $('#catModalTitle').textContent = cat ? '编辑分类' : '新增分类';
+    let title = '新增分类';
+    if (cat) title = '编辑分类';
+    else if (parentId) {
+      const ph = findCat(parentId);
+      title = '在「' + (ph ? ph.cat.name : '') + '」下新增子分类（' + ((ph ? ph.depth : 0) + 1) + ' 级）';
+    }
+    $('#catModalTitle').textContent = title;
     $('#catNameInput').value = cat ? cat.name : '';
     $('#catIconInput').value = cat ? (cat.icon || '') : '';
     $('#catIconStatus').textContent = '';
@@ -424,21 +515,32 @@
     if (!name) { alert('请输入分类名称'); return; }
     const icon = state.catUploadedIcon || $('#catIconInput').value.trim();
     if (state.catModalEditId) {
-      const c = state.data.categories.find((x) => x.id === state.catModalEditId);
-      if (!c) return;
-      c.name = name; c.icon = icon;
+      const hit = findCat(state.catModalEditId);
+      if (!hit) return;
+      hit.cat.name = name; hit.cat.icon = icon;
     } else {
-      const ids = new Set(state.data.categories.map((c) => c.id));
+      const ids = allCatIds();
       if (ids.has(slug(name))) { alert('分类已存在'); return; }
       const id = uniqueId(slug(name), ids);
-      state.data.categories.push({ id, name, icon, links: [] });
+      const node = { id, name, icon, links: [], children: [] };
+      const parentId = state.catModalParentId;
+      if (parentId) {
+        const hit = findCat(parentId);
+        if (!hit) return;
+        if (hit.depth >= MAX_CAT_DEPTH) { alert('最多只支持 ' + MAX_CAT_DEPTH + ' 级分类'); return; }
+        hit.cat.children = kids(hit.cat);
+        hit.cat.children.push(node);
+        state.catCollapsed[parentId] = false; // 展开父级，让新建的子分类立刻可见
+      } else {
+        state.data.categories.push(node);
+      }
       state.activeCatId = id;
     }
     state.dirty = true; renderCats(); renderLinks(); updateSaved(); closeCatModal();
   }
 
   /* ================= 链接管理 ================= */
-  function activeCat() { return state.data.categories.find((c) => c.id === state.activeCatId); }
+  function activeCat() { const h = findCat(state.activeCatId); return h ? h.cat : null; }
 
   function visibleIndices(cat) {
     const kw = state.filter.trim().toLowerCase();
@@ -455,7 +557,7 @@
     const body = $('#linkBody');
     $('#curCatName').textContent = cat ? ('当前分类：' + cat.name + '（' + cat.links.length + '）') : '（无分类）';
     const totalCat = cat ? cat.links.reduce((a, l) => a + (l.visits || 0), 0) : 0;
-    const totalAll = state.data.categories.reduce((a, c) => a + (c.links || []).reduce((b, l) => b + (l.visits || 0), 0), 0);
+    const totalAll = flatCats().reduce((a, x) => a + (x.cat.links || []).reduce((b, l) => b + (l.visits || 0), 0), 0);
     $('#statHint').innerHTML = `分类访问 <b>${totalCat}</b> · 总访问 <b>${totalAll}</b>`;
     body.innerHTML = '';
     if (!cat) { updateBatchBar(); return; }
@@ -570,7 +672,8 @@
     if (!sel) return;
     const cur = state.activeCatId;
     const opts = state.data
-      ? state.data.categories.filter((c) => c.id !== cur).map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')
+      ? flatCats().filter((x) => x.cat.id !== cur)
+          .map((x) => `<option value="${esc(x.cat.id)}">${'　'.repeat(x.depth - 1)}${esc(x.cat.name)}</option>`).join('')
       : '';
     sel.innerHTML = opts || '<option value="">（无其他分类）</option>';
   }
@@ -597,7 +700,8 @@
   function moveSelected() {
     const cat = activeCat();
     const targetId = $('#moveTargetCat').value;
-    const target = state.data.categories.find((c) => c.id === targetId);
+    const tHit = findCat(targetId);
+    const target = tHit ? tHit.cat : null;
     const items = selectedLinkObjects();
     if (!cat || !target) { alert('请选择目标分类'); return; }
     if (target.id === cat.id) { alert('目标分类与当前分类相同，无需转移'); return; }
@@ -714,18 +818,23 @@
     list.querySelectorAll('.cat-item').forEach((el) => {
       el.addEventListener('dragstart', () => { dragFrom = el.dataset.cid; el.classList.add('dragging'); });
       el.addEventListener('dragend', () => { dragFrom = null; el.classList.remove('dragging'); list.querySelectorAll('.cat-item').forEach((x) => x.classList.remove('drop-over')); });
-      el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop-over'); });
+      el.addEventListener('dragover', (e) => {
+        if (!dragFrom) return;
+        // 仅允许在同一父级内重排：跨层级拖拽会把整棵子树误移进别的分支
+        const a = findCat(dragFrom), b = findCat(el.dataset.cid);
+        if (!a || !b || a.parent !== b.parent) return;
+        e.preventDefault(); el.classList.add('drop-over');
+      });
       el.addEventListener('dragleave', () => el.classList.remove('drop-over'));
       el.addEventListener('drop', (e) => {
         e.preventDefault(); el.classList.remove('drop-over');
         const to = el.dataset.cid;
         if (!dragFrom || dragFrom === to) return;
-        const cats = state.data.categories;
-        const fromIdx = cats.findIndex((c) => c.id === dragFrom);
-        const toIdx = cats.findIndex((c) => c.id === to);
-        if (fromIdx < 0 || toIdx < 0) return;
-        const [item] = cats.splice(fromIdx, 1);
-        cats.splice(toIdx, 0, item);
+        const a = findCat(dragFrom), b = findCat(to);
+        if (!a || !b || a.parent !== b.parent) return;
+        const sibs = a.siblings;
+        const [item] = sibs.splice(a.index, 1);
+        sibs.splice(sibs.indexOf(b.cat), 0, item);
         state.dirty = true; renderCats(); updateSaved();
       });
     });
@@ -748,7 +857,7 @@
 
   function renderResults() {
     const list = $('#resultList'); list.innerHTML = '';
-    const cats = state.data.categories.map((c) => c.name);
+    const cats = flatCats().map((x) => x.cat.name);
     state.aiResults.forEach((r, i) => {
       const div = document.createElement('div');
       div.style.cssText = 'display:grid;grid-template-columns:28px 1fr 1.4fr 1fr;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--border)';
@@ -921,26 +1030,34 @@
     return null;
   }
 
+  // 递归合并：按层级在对应父节点下找同名分类，找不到就新建，并保留子分类结构
   function mergeImported(cats) {
-    const exist = state.data.categories;
     const stat = { newCats: 0, newLinks: 0, skipped: 0 };
-    for (const c of cats) {
-      let target = exist.find((x) => x.name === c.name) || exist.find((x) => x.id === slug(c.name));
-      if (!target) {
-        const ids = new Set(exist.map((x) => x.id));
-        target = { id: uniqueId(slug(c.name), ids), name: c.name, icon: c.icon || '', links: [] };
-        exist.push(target);
-        stat.newCats++;
+    (function mergeLevel(list, parentNode) {
+      const pool = parentNode ? kids(parentNode) : state.data.categories;
+      for (const c of (list || [])) {
+        if (!c || !c.name) continue;
+        let target = pool.find((x) => x.name === c.name) || pool.find((x) => x.id === slug(c.name));
+        if (!target) {
+          const ids = allCatIds();
+          target = { id: uniqueId(slug(c.name), ids), name: c.name, icon: c.icon || '', links: [], children: [] };
+          pool.push(target);
+          stat.newCats++;
+        }
+        const urls = new Set(target.links.map((l) => l.url));
+        for (const l of (c.links || [])) {
+          if (urls.has(l.url)) { stat.skipped++; continue; }
+          target.links.push(l);
+          urls.add(l.url);
+          stat.newLinks++;
+        }
+        if (c.children && c.children.length) mergeLevel(c.children, target);
       }
-      const urls = new Set(target.links.map((l) => l.url));
-      for (const l of c.links) {
-        if (urls.has(l.url)) { stat.skipped++; continue; }
-        target.links.push(l);
-        urls.add(l.url);
-        stat.newLinks++;
-      }
-    }
+    })(cats, null);
     return stat;
+  }
+  function countLinksOfList(list) {
+    return (list || []).reduce((a, c) => a + (c.links || []).length + countLinksOfList(c.children), 0);
   }
 
   async function importDataFile(file) {
@@ -960,13 +1077,22 @@
       }
 
       const mode = $('#importMode').value;
-      const total = cats.reduce((a, c) => a + c.links.length, 0);
+      const total = countLinksOfList(cats);
       if (mode === 'replace') {
         if (!confirm(`覆盖导入：将清空现有 ${state.data.categories.length} 个分类，写入 ${cats.length} 个分类 / ${total} 条书签。确定继续？`)) {
           st.textContent = '已取消'; return;
         }
         const ids = new Set();
-        state.data.categories = cats.map((c) => ({ id: uniqueId(slug(c.name), ids), name: c.name, icon: c.icon, links: c.links }));
+        const conv = (list) => (list || []).map((c) => {
+          const id = uniqueId(slug(c.name) || 'cat', ids);
+          ids.add(id); // 防止同名分类拿到重复 id
+          return {
+            id, name: c.name, icon: c.icon || '',
+            links: Array.isArray(c.links) ? c.links.slice() : [],
+            children: (c.children && c.children.length) ? conv(c.children) : []
+          };
+        });
+        state.data.categories = conv(cats);
         state.activeCatId = state.data.categories[0] ? state.data.categories[0].id : null;
         state.sel.clear();
         st.textContent = `已覆盖导入：${cats.length} 个分类 / ${total} 条书签（尚未保存，请点「💾 保存」）`;
@@ -1057,15 +1183,18 @@
     $('#setFooter').value = s.footer || '';
 
     ['searchPosition', 'categoryPosition', 'categoryArrangement', 'cardSize', 'wallpaperType'].forEach((k) => {
+      // 壁纸类型为空时默认高亮「无」，避免类型按钮全灭导致类型与壁纸值不同步
+      const cur = s[k] || (k === 'wallpaperType' ? 'none' : '');
       document.querySelectorAll('.seg-btn[data-key="' + k + '"]').forEach((b) => {
-        b.classList.toggle('on', b.dataset.val === s[k]);
+        b.classList.toggle('on', b.dataset.val === cur);
       });
     });
 
     const sel = $('#setDefaultCategory');
     sel.innerHTML = '<option value="all">默认 [全部]</option>' +
-      state.data.categories.map((c) =>
-        '<option value="' + esc(c.id) + '" ' + (s.defaultCategory === c.id ? 'selected' : '') + '>' + esc(c.name) + '</option>'
+      flatCats().map((x) =>
+        '<option value="' + esc(x.cat.id) + '" ' + (s.defaultCategory === x.cat.id ? 'selected' : '') + '>' +
+        '　'.repeat(x.depth - 1) + esc(x.cat.name) + '</option>'
       ).join('');
 
     $('#setRememberCategory').checked = !!s.rememberCategory;
@@ -1321,6 +1450,14 @@
     state.dirty = true; updateSaved();
   }
 
+  // 兼容早期只填了壁纸值、没选类型的数据：按内容推断类型
+  function guessWallpaperType(v) {
+    if (!v) return 'none';
+    if (/gradient\(/i.test(v)) return 'gradient';
+    if (/^#[0-9a-f]{3,8}$/i.test(v) || /^rgba?\(/i.test(v)) return 'color';
+    return 'image';
+  }
+
   function saveSettings() {
     const s = state.data.site = state.data.site || {};
     s.title = $('#setTitle').value.trim();
@@ -1333,7 +1470,14 @@
     s.cardRadius = +$('#setCardRadius').value;
     s.cardShadow = $('#setCardShadow').checked;
     s.showVisits = $('#setShowVisits').checked;
-    s.wallpaperValue = $('#setWallpaperValue').value.trim();
+    const wpVal = $('#setWallpaperValue').value.trim();
+    s.wallpaperValue = wpVal;
+    // 壁纸类型必须与壁纸值一起保存：缺失类型时前台会直接跳过壁纸渲染，
+    // 表现为「后台设置了壁纸、主页毫无变化」。
+    const wpBtn = document.querySelector('.seg-btn[data-key="wallpaperType"].on');
+    if (wpBtn) s.wallpaperType = wpBtn.dataset.val;
+    else if (wpVal) s.wallpaperType = guessWallpaperType(wpVal);
+    else s.wallpaperType = 'none';
     s.wallpaperOpacity = +$('#setWallpaperOpacity').value;
     s.wallpaperBlur = +$('#setWallpaperBlur').value;
     // 字体
