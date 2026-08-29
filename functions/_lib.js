@@ -43,8 +43,8 @@ const DEFAULT_CFG = {
   SESSION_SECRET: ''
 };
 
-const TOKEN_TTL = 7 * 24 * 3600 * 1000; // 登录有效期 7 天
-const SESSION_TTL_SHORT = 12 * 3600 * 1000; // 不勾选“记住我”时 12 小时
+const TOKEN_TTL = 30 * 24 * 3600 * 1000; // 勾选“记住登录”时的有效期：30 天
+const SESSION_TTL_SHORT = 12 * 3600 * 1000; // 未勾选时：12 小时
 
 /* ---------- 基础工具 ---------- */
 export function sendJSON(obj, code = 200) {

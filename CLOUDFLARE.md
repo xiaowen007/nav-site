@@ -90,6 +90,7 @@ npm run deploy     # = npx wrangler pages deploy .
 
 - 首次打开网站时，Functions 会自动把当前 `data/sites.json`（已打包进种子 `functions/_seed.js`）写入 KV。
 - 之后在**后台**（`/admin.html`）的增删改、排序、分类图标、访问统计都会持久化到 KV / R2。
+- 后台「生成图片」的分类图标存进 R2，主页通过 `/uploads/xxx.png` 引用。**未绑定 R2 时该地址返回 503**，前端会自动回退显示默认图标 🔗 —— 若图标变成 🔗，先检查 R2 绑定。
 - 想重新用本地 `data/sites.json` 覆盖线上数据：在后台点“导出 JSON”拿到最新数据，或清理 KV 键 `sites` 后重新访问即重新播种。
 
 ## 设置后台管理员密码
@@ -100,7 +101,7 @@ npm run deploy     # = npx wrangler pages deploy .
 1. 浏览器打开 `https://你的域名/admin.html`。
 2. 全新部署时 KV 里还没有密码，`GET /api/auth` 返回 `configured:false`，页面自动弹出「初始化管理员账号」界面。
 3. 填：管理员账号（≥2 字符，如 `admin`）、密码（≥6 位）、确认密码。
-4. 确定 → `POST /api/auth/setup` 把账号密码写入 KV；之后用该账号密码登录，可勾选「记住 7 天」。
+4. 确定 → `POST /api/auth/setup` 把账号密码写入 KV；之后用该账号密码登录，可勾选「记住 30 天」（默认勾选，未勾选则为 12 小时）。
 
 ### 方式二：用 Cloudflare 环境变量 / Secret 预设（不用走初始化）
 - Cloudflare Dashboard → 项目 **Settings → Variables and Secrets**（或 Functions 变量）添加：
@@ -186,9 +187,10 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 
 ### 防浏览器缓存：静态资源版本号由构建自动注入（免手动）
 - `index.html` / `admin.html` 里 `css/style.css`、`js/app.js`、`js/admin.js` 的 `?v=` 已改为**部署时自动生成**：
-  仓库里是占位值 `?v=20260829`，真正部署由构建脚本 `scripts/version.js` 在每次构建时把占位替换成
+  仓库里是占位值（当前 `?v=20260830`），真正部署由构建脚本 `scripts/version.js` 在每次构建时把占位替换成
   **当前 git commit 短哈希**（取不到时回退构建时间戳），因此每次发版 `?v=` 都不同，浏览器把「不同查询串」视为新文件，
   **自动拉取新文件**，通常无需手动 `Ctrl+F5` 强刷（彻底解决「改了代码像没生效」的缓存痛点）。
+  兜底：若尚未配置 Build command，请手动把两个 html 里的 `?v=` 日期往前拨一位，否则 URL 不变、浏览器仍用旧缓存。
 - **Cloudflare 设置**：后台 **Settings → Builds & deployments** 把 **Build command** 设为
   `node scripts/version.js`（Build output directory 仍为 `.`）。该脚本只把 html 里的 `?v=` 换成构建标识，不产生其它产物。
 - ⚠️ 两层「生效」仍要分清：

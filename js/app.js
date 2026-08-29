@@ -169,7 +169,7 @@
       a.className = 'side-item cat';
       a.dataset.target = c.id;
       a.href = '#' + c.id;
-      a.innerHTML = `<span>${c.icon || '🔗'}</span><span class="lbl">${escapeHtml(c.name)}</span>`;
+      a.innerHTML = `<span>${catIconHtml(c.icon, 16)}</span><span class="lbl">${escapeHtml(c.name)}</span>`;
       nav.appendChild(a);
     });
     nav.querySelectorAll('.side-item').forEach((item) => {
@@ -213,7 +213,7 @@
     nav.id = 'topNav';
     const allCls = 'top-nav-item';
     nav.innerHTML = '<a class="' + allCls + '" data-target="all" href="#all">🏠 全部</a>' +
-      state.data.categories.map((c) => '<a class="' + allCls + '" data-target="' + c.id + '" href="#' + c.id + '">' + (c.icon || '🔗') + ' ' + escapeHtml(c.name) + '</a>').join('');
+      state.data.categories.map((c) => '<a class="' + allCls + '" data-target="' + c.id + '" href="#' + c.id + '">' + catIconHtml(c.icon, 16) + ' ' + escapeHtml(c.name) + '</a>').join('');
     layout.insertBefore(nav, layout.querySelector('.content'));
     nav.querySelectorAll('.' + allCls).forEach((a) => {
       a.addEventListener('click', (e) => {
@@ -257,7 +257,24 @@
     });
     if (wrap.children.length) topbar.appendChild(wrap);
   }
-  function isImgIcon(icon) { return !!icon && /^(https?:\/\/|\/uploads\/|\/api\/uploads\/|data:image\/)/.test(icon); }
+  function isImgIcon(icon) {
+    if (!icon) return false;
+    const v = String(icon).trim();
+    if (/^(https?:\/\/|\/uploads\/|\/api\/uploads\/|data:image\/|\.?\/?uploads\/)/i.test(v)) return true;
+    // 兜底：形如 cat-abc.png 的文件名（无空白、无查询串），避免 emoji/文字被误判
+    return /^[^\s?]+\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i.test(v);
+  }
+  // 分类/区块图标统一渲染：图片地址输出 <img>，emoji 或文字按文本输出
+  function catIconHtml(icon, px) {
+    const size = px || 16;
+    if (isImgIcon(icon)) {
+      return '<img class="cat-icon-img" src="' + escapeHtml(icon) + '" alt="" ' +
+        'style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;border-radius:4px;vertical-align:middle" ' +
+        // 图片取不到（如线上未绑定 R2、文件已被清理）时回退为默认图标，避免留白
+        "onerror=\"this.outerHTML='&#128279;'\" />";
+    }
+    return escapeHtml(icon || '🔗');
+  }
 
   /* ===== 搜索引擎快速入口 ===== */
   // 默认引擎：可用 data/sites.json 的 site.searchEngines 覆盖（[{id,name,url}]，url 需以查询参数结尾）
@@ -450,7 +467,7 @@
       sec.id = 'sec-' + c.id;
       sec.innerHTML = `
         <div class="section-head">
-          <span class="sec-icon">${c.icon || '🔗'}</span>
+          <span class="sec-icon">${catIconHtml(c.icon, 20)}</span>
           <span>${escapeHtml(c.name)}</span>
           <span class="sec-count">${links.length}</span>
         </div>

@@ -83,8 +83,10 @@
   }
 
   // 无需登录态的接口（登录、初始化、状态查询）
+  // 注意：仍会附带本地 token（若存在）。否则 /api/auth 拿不到 token 会一直返回
+  // loggedIn=false，导致刷新/切换页面后明明已登录却被要求重新输入账号密码。
   async function apiPublic(path, method, body) {
-    const { res, data } = await request(path, method, body, false);
+    const { res, data } = await request(path, method, body, true);
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     return data;
   }

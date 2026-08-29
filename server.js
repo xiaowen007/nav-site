@@ -68,7 +68,8 @@ const AI_ENABLED = !!CFG.AI_API_KEY;
 CFG.AI_ENABLED = AI_ENABLED;
 
 /* ---------- 登录会话（HMAC 签名 token，不使用明文密码传输） ---------- */
-const TOKEN_TTL = 7 * 24 * 3600 * 1000; // 登录有效期 7 天
+const TOKEN_TTL = 30 * 24 * 3600 * 1000; // 勾选“记住登录”时的有效期：30 天
+const SESSION_TTL_SHORT = 12 * 3600 * 1000; // 未勾选时：12 小时
 
 function b64url(str) {
   return Buffer.from(str, 'utf8').toString('base64')
@@ -642,7 +643,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
       throttleReset(ip);
-      const t = issueToken(user, TOKEN_TTL, !!body.remember);
+      const t = issueToken(user, body.remember ? TOKEN_TTL : SESSION_TTL_SHORT, !!body.remember);
       return sendJSON(res, 200, { ok: true, ...t });
     }
 
