@@ -72,7 +72,7 @@ npm run deploy     # = npx wrangler pages deploy .
 ### 方式 B：连接 GitHub 自动部署（推荐长期）
 
 1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → 连接 Git 仓库 `xiaowen007/nav-site`。
-2. 构建设置：**Build command** 留空，**Build output directory** 填 `.`（点号，表示根目录）。
+2. 构建设置：**Build command** 填 `node scripts/version.js`，**Build output directory** 填 `.`（点号，表示根目录）。该脚本在每次构建时把 `?v=` 拨为当天日期（防缓存），配合 `.github/workflows/daily-version.yml` 还能每日自动重新部署。
 3. 先按「二、创建存储」建好 KV 命名空间和 R2 桶。
 4. 直接部署（**无需预先绑定 KV/R2**）。此时网站以**只读种子数据**正常打开，写操作返回 503，属预期。
 5. 部署后在**后台添加绑定**：
@@ -185,20 +185,22 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 - 只想让首页可浏览、暂不保存：未绑定 KV 时首页本就以只读种子数据正常展示，不影响访问。
 - 其他异常先看 Dashboard → Logs / 部署日志。
 
-### 防浏览器缓存：静态资源版本号由构建自动注入（免手动）
-- `index.html` / `admin.html` 里 `css/style.css`、`js/app.js`、`js/admin.js` 的 `?v=` 已改为**部署时自动生成**：
-  仓库里是占位值（当前 `?v=20260832`），真正部署由构建脚本 `scripts/version.js` 在每次构建时把占位替换成
-  **当前 git commit 短哈希**（取不到时回退构建时间戳），因此每次发版 `?v=` 都不同，浏览器把「不同查询串」视为新文件，
-  **自动拉取新文件**，通常无需手动 `Ctrl+F5` 强刷（彻底解决「改了代码像没生效」的缓存痛点）。
-  兜底：若尚未配置 Build command，请手动把两个 html 里的 `?v=` 日期往前拨一位，否则 URL 不变、浏览器仍用旧缓存。
+### 防浏览器缓存：静态资源版本号由构建自动拨号（免手动 + 每日自动）
+- `index.html` / `admin.html` 里 `css/style.css`、`js/app.js`、`js/lunar.js`、`js/admin.js` 的 `?v=` 在**部署构建时自动生成**：
+  脚本 `scripts/version.js` 在每次构建时把所有 `?v=YYYYMMDD` 替换为**当天日期戳**（如 `20260830`），
+  因此每次部署 `?v=` 都会变，浏览器把「不同查询串」视为新文件、**自动拉取新文件**，无需手动 `Ctrl+F5` 强刷。
 - **Cloudflare 设置**：后台 **Settings → Builds & deployments** 把 **Build command** 设为
-  `node scripts/version.js`（Build output directory 仍为 `.`）。该脚本只把 html 里的 `?v=` 换成构建标识，不产生其它产物。
+  `node scripts/version.js`（Build output directory 仍为 `.`）。该脚本只改 html 里的 `?v=`，不产生其它产物。
+- **每日自动执行（无需手动 push）**：仓库已含 `.github/workflows/daily-version.yml`，
+  每天 **UTC 16:00（= 北京 0:00）** 自动跑 `scripts/version.js` 把 `?v=` 拨为当天日期并 push 到 `main`，
+  由已绑定的 Cloudflare Pages（git push 触发）完成当日重新部署，使浏览器缓存每天自动失效。
+  如需其它时间，改 workflow 里的 `cron: '0 16 * * *'` 即可；也可在 Actions 页面手动 **Run workflow** 立即触发。
 - ⚠️ 两层「生效」仍要分清：
   1. **上线生效**：改了代码必须 `git push` → Cloudflare 自动重新部署（或手动 Redeploy），否则线上跑旧文件；
-  2. **客户端生效**：`?v=` 因 commit 哈希变化而不同，浏览器才会放弃缓存去拉新。
-  两者都满足，改动能真正被看到；只看版本号不 push，或只 push 没触发新提交，都可能「看起来没生效」。
-- 本地预览（`node server.js` → http://localhost:8787）：静态服务会忽略 `?v=` 查询串，占位值也能正常加载；
-  若想本地也刷新版本号，跑一次 `node scripts/version.js`（会把 html 改成当前 commit 哈希，预览后可用 `git checkout -- index.html admin.html` 还原）。
+  2. **客户端生效**：`?v=` 因日期变化而不同，浏览器才会放弃缓存去拉新。
+  两者都满足，改动能真正被看到；只拨号不 push，或只 push 没触发新构建，都可能「看起来没生效」。
+- 本地预览（`node server.js` → http://localhost:8787）：静态服务会忽略 `?v=` 查询串，当前日期值也能正常加载；
+  若想本地也刷新版本号，跑一次 `node scripts/version.js`（会把 html 改成当天日期，预览后可用 `git checkout -- index.html admin.html` 还原）。
 
 ## 九、速查清单：绑定 → 重部署 → 后台保存 → 主页验证
 
