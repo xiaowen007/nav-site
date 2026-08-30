@@ -777,9 +777,10 @@
 
   async function saveAll() {
     if (state.data && state.data.readOnly) {
-      $('#consoleStatus').textContent = '存储未绑定 NAV_KV，无法保存：请到 Cloudflare 后台 Workers & Pages → nav-site → Settings → Functions 绑定 KV（变量名 NAV_KV）后重试。';
+      const msg = '存储未绑定 NAV_KV，无法保存：请到 Cloudflare 后台 Workers & Pages → nav-site → Settings → Functions 绑定 KV（变量名 NAV_KV）后重试。';
+      $('#consoleStatus').textContent = msg;
       $('#consoleStatus').className = 'status err';
-      return;
+      throw new Error(msg); // 抛出，让调用方（如「保存设置」）也能感知失败
     }
     const btn = $('#saveAll'); btn.disabled = true;
     try {
@@ -790,6 +791,7 @@
     } catch (e) {
       $('#consoleStatus').textContent = '保存失败：' + e.message;
       $('#consoleStatus').className = 'status err';
+      throw e; // 抛出，让调用方（如「保存设置」）也能感知失败
     } finally { btn.disabled = false; }
   }
 
@@ -1458,7 +1460,7 @@
     return 'image';
   }
 
-  function saveSettings() {
+  async function saveSettings() {
     const s = state.data.site = state.data.site || {};
     s.title = $('#setTitle').value.trim();
     s.subtitle = $('#setSubtitle').value.trim();
@@ -1488,11 +1490,21 @@
     s.contentPanelOpacity = +$('#setContentPanelOpacity').value;
     s.contentPanelRadius = +$('#setContentPanelRadius').value;
     state.dirty = true; updateSaved();
-    $('#settingsSaveStatus').textContent = '✓ 已写入内存，点「① 导航数据管理」的「💾 保存」即可生效';
+    // 直接落库：原先只写进内存、还必须再点一次「💾 保存」才提交，这一步极易被忽略，
+    // 正是「后台改了设置、主页毫无变化」的最常见人为原因。现在点一次即生效。
+    const stEl = $('#settingsSaveStatus');
+    stEl.textContent = '保存中…';
+    try {
+      await saveAll();
+      stEl.textContent = '✓ 已保存，刷新主页即可看到效果';
+    } catch (e) {
+      stEl.textContent = '✗ 保存失败：' + (e && e.message ? e.message : '未知错误');
+    }
   }
 
   function bindSettings() {
-    $('#settingsSave').addEventListener('click', saveSettings);
+    // saveSettings 为异步，需兜住可能的 rejection
+    $('#settingsSave').addEventListener('click', () => { saveSettings().catch(() => {}); });
 
     document.querySelectorAll('.seg-btn[data-key]').forEach((b) => {
       b.addEventListener('click', () => {
@@ -1539,7 +1551,7 @@
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        saveAll();
+        saveAll().catch(() => {});
       }
     });
 
@@ -1677,7 +1689,8 @@
 
     $('#addCat').addEventListener('click', addCat);
     $('#addLink').addEventListener('click', addLink);
-    $('#saveAll').addEventListener('click', saveAll);
+    // saveAll 失败时会 throw，需兜住 rejection
+    $('#saveAll').addEventListener('click', () => { saveAll().catch(() => {}); });
     $('#recognizeBtn').addEventListener('click', recognize);
     $('#writeBtn').addEventListener('click', writeSelected);
     $('#saveCfg').addEventListener('click', saveCfg);

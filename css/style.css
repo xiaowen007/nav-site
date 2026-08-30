@@ -14,6 +14,8 @@
   --font-size: 14px;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  /* 开启壁纸时顶栏 / 侧栏改用半透明面板，让壁纸能全屏透出（不透明面板会挡住壁纸） */
+  --panel-translucent: rgba(255, 255, 255, .78);
 }
 
 * { box-sizing: border-box; }
@@ -349,7 +351,11 @@ body.content-panel .content {
 }
 
 /* 壁纸：固定背景层 */
-body.wallpaper { position: relative; }
+/* 关键：html, body 默认有「不透明」背景（见顶部 html, body 规则）。
+   负 z-index 的定位元素绘制在父元素背景「之下」，若不给 body 去掉背景色，
+   壁纸层与遮罩层会被 body 自己的背景整个盖住 —— 表现为后台设了壁纸、主页毫无变化。
+   底层仍由 html 的 --bg 兜底，壁纸透明或未加载时视觉与原来一致。 */
+body.wallpaper { position: relative; background: transparent; }
 body.wallpaper::before {
   content: ''; position: fixed; inset: 0; z-index: -1;
   background: var(--wp-bg, none); background-size: cover; background-position: center;
@@ -360,6 +366,10 @@ body.wallpaper::after {
   background: rgba(255,255,255,var(--wp-opacity, 0.08));
 }
 [data-theme="dark"] body.wallpaper::after { background: rgba(0,0,0,var(--wp-opacity, 0.08)); }
+/* 顶栏 / 侧栏默认是不透明面板，会挡住壁纸；开启壁纸时改用半透明版本，让壁纸全屏透出 */
+body.wallpaper .topbar,
+body.wallpaper .sidebar,
+body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
 
 .empty {
   color: var(--muted);
@@ -570,6 +580,7 @@ body.wallpaper::after {
   --primary-soft: #1f2d44;
   --border: #2a3340;
   --shadow: 0 2px 12px rgba(0,0,0,.4);
+  --panel-translucent: rgba(26, 33, 43, .78);
 }
 
 /* 后台登录遮罩 */
