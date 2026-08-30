@@ -1220,17 +1220,6 @@
     syncFontOptions();
     renderFonts();
 
-    // 背景板
-    $('#setContentPanel').checked = !!s.contentPanel;
-    const cpo = s.contentPanelOpacity != null ? s.contentPanelOpacity : 0.85;
-    $('#setContentPanelOpacity').value = cpo;
-    $('#setContentPanelOpacityVal').textContent = (+cpo).toFixed(2);
-    const cpr = s.contentPanelRadius != null ? s.contentPanelRadius : 16;
-    $('#setContentPanelRadius').value = cpr;
-    $('#setContentPanelRadiusVal').textContent = cpr;
-
-    renderFuncIcons(s.functionIcons || []);
-
     // 缓存开关（顶栏）
     $('#cacheEnabled').checked = s.cacheEnabled === true;
     updateCacheStatus();
@@ -1255,37 +1244,6 @@
     if (!el) return;
     const has = CACHE_KEYS.some((k) => localStorage.getItem(k) != null);
     el.textContent = has ? '有缓存' : '';
-  }
-
-  function renderFuncIcons(list) {
-    const wrap = $('#setFuncIcons'); wrap.innerHTML = '';
-    if (!list.length) { wrap.innerHTML = '<p class="hint" style="margin:0">暂无功能图标，点击下方按钮添加</p>'; return; }
-    list.forEach((f, i) => {
-      const row = document.createElement('div');
-      row.className = 'func-icon-row';
-      row.innerHTML =
-        '<input class="fi-name" placeholder="名称" value="' + esc(f.name) + '" />' +
-        '<input class="fi-url" placeholder="https://…" value="' + esc(f.url) + '" />' +
-        '<input class="fi-icon" placeholder="🖼️" value="' + esc(f.icon || '') + '" title="emoji 或图片 URL" />' +
-        '<label class="hint" style="display:flex;align-items:center;gap:3px;margin:0"><input type="checkbox" class="fi-ext" ' + (f.external ? 'checked' : '') + '/>新窗口</label>' +
-        '<button class="fi-del" title="删除">✕</button>';
-      row.querySelector('.fi-name').addEventListener('input', (e) => { f.name = e.target.value; state.dirty = true; updateSaved(); });
-      row.querySelector('.fi-url').addEventListener('input', (e) => { f.url = e.target.value; state.dirty = true; updateSaved(); });
-      row.querySelector('.fi-icon').addEventListener('input', (e) => { f.icon = e.target.value; state.dirty = true; updateSaved(); });
-      row.querySelector('.fi-ext').addEventListener('change', (e) => { f.external = e.target.checked; state.dirty = true; updateSaved(); });
-      row.querySelector('.fi-del').addEventListener('click', () => {
-        list.splice(i, 1); renderFuncIcons(list); state.dirty = true; updateSaved();
-      });
-      wrap.appendChild(row);
-    });
-  }
-
-  function addFuncIcon() {
-    const s = state.data.site = state.data.site || {};
-    s.functionIcons = s.functionIcons || [];
-    s.functionIcons.push({ name: '新图标', url: '', icon: '🔗', external: true });
-    renderFuncIcons(s.functionIcons);
-    state.dirty = true; updateSaved();
   }
 
   /* ===== 搜索引擎管理（后台 ⑧ 面板） ===== */
@@ -1485,10 +1443,6 @@
     // 字体
     s.fontSize = +$('#setFontSize').value || 14;
     s.fontFamily = $('#setFontFamily').value;
-    // 背景板
-    s.contentPanel = $('#setContentPanel').checked;
-    s.contentPanelOpacity = +$('#setContentPanelOpacity').value;
-    s.contentPanelRadius = +$('#setContentPanelRadius').value;
     state.dirty = true; updateSaved();
     // 直接落库：原先只写进内存、还必须再点一次「💾 保存」才提交，这一步极易被忽略，
     // 正是「后台改了设置、主页毫无变化」的最常见人为原因。现在点一次即生效。
@@ -1526,12 +1480,9 @@
     $('#setWallpaperOpacity').addEventListener('input', (e) => { $('#setWallpaperOpacityVal').textContent = (+e.target.value).toFixed(2); });
     $('#setWallpaperBlur').addEventListener('input', (e) => { $('#setWallpaperBlurVal').textContent = e.target.value; });
 
-    // 字体与背景板：实时显示数值
+    // 字体：实时显示数值
     $('#setFontSize').addEventListener('input', (e) => { $('#setFontSizeVal').textContent = e.target.value + 'px'; });
-    $('#setContentPanelOpacity').addEventListener('input', (e) => { $('#setContentPanelOpacityVal').textContent = (+e.target.value).toFixed(2); });
-    $('#setContentPanelRadius').addEventListener('input', (e) => { $('#setContentPanelRadiusVal').textContent = e.target.value; });
 
-    $('#addFuncIcon').addEventListener('click', addFuncIcon);
     $('#addEngine').addEventListener('click', addEngine);
     $('#resetEngines').addEventListener('click', resetEngines);
     $('#addFont').addEventListener('click', addFont);

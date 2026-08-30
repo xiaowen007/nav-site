@@ -276,29 +276,6 @@
     });
   }
 
-  /* 功能图标（顶栏） */
-  function renderFuncIcons() {
-    const s = state.data.site || {};
-    const list = s.functionIcons || [];
-    if (!list.length) return;
-    const topbar = document.querySelector('.topbar');
-    if (!topbar) return;
-    const wrap = document.createElement('div');
-    wrap.className = 'func-icons';
-    list.forEach((f) => {
-      if (!f || !f.url) return;
-      const a = document.createElement('a');
-      a.href = f.url;
-      a.title = f.name || '';
-      const isImg = isImgIcon(f.icon);
-      a.innerHTML = (f.icon && !isImg ? '<span>' + escapeHtml(f.icon) + '</span>' : '') +
-                    (isImg ? '<img src="' + escapeHtml(f.icon) + '" style="width:16px;height:16px;object-fit:contain;border-radius:4px"/>' : '') +
-                    '<span class="fi-txt">' + escapeHtml(f.name || '') + '</span>';
-      if (f.external !== false) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
-      wrap.appendChild(a);
-    });
-    if (wrap.children.length) topbar.appendChild(wrap);
-  }
   function isImgIcon(icon) {
     if (!icon) return false;
     const v = String(icon).trim();
@@ -426,15 +403,6 @@
     else root.style.removeProperty('--font-family');
   }
 
-  /* ===== 内容背景板 ===== */
-  function applyContentPanel() {
-    const s = state.data.site || {};
-    document.body.classList.toggle('content-panel', !!s.contentPanel);
-    if (s.contentPanel) {
-      document.body.style.setProperty('--cp-opacity', s.contentPanelOpacity != null ? s.contentPanelOpacity : 0.85);
-      document.body.style.setProperty('--cp-radius', (s.contentPanelRadius != null ? s.contentPanelRadius : 16) + 'px');
-    }
-  }
 
   /* 壁纸 */
   // 兼容早期只填了壁纸值、没选类型的数据：按内容推断类型
@@ -480,11 +448,8 @@
     if (s.searchPosition === 'above') {
       document.documentElement.classList.add('search-above');
     }
-    // 功能图标
-    renderFuncIcons();
-    // 字体与背景板
+    // 字体
     applyTypography();
-    applyContentPanel();
     // 壁纸
     applyWallpaper();
     // 默认 / 记住分类
@@ -859,38 +824,51 @@
     } catch (e) {}
     return '';
   }
+  // 缓存只在「拉取失败」时兜底，正常情况下天气跟随页面刷新实时更新
   function readWeatherCache() {
     try {
       const o = JSON.parse(localStorage.getItem('nav_weather'));
-      if (o && Date.now() - o.ts < 600000) return o;
+      if (o && o.temp != null) return o;
     } catch (e) {}
     return null;
   }
   function writeWeatherCache(o) {
     try { o.ts = Date.now(); localStorage.setItem('nav_weather', JSON.stringify(o)); } catch (e) {}
   }
+  // 按 IP 定位：不再使用 navigator.geolocation。
+  // 它会弹授权框，用户拒绝或超时会直接抛错且不回退到 IP，
+  // 导致天气长期停在旧数据或一直显示「天气不可用」。
+  async function locateByIp() {
+    const sources = [
+      { url: 'https://ipapi.co/json/', pick: (d) => ({ lat: d.latitude, lon: d.longitude, city: d.city || '' }) },
+      { url: 'https://ipwho.is/', pick: (d) => ({ lat: d.latitude, lon: d.longitude, city: d.city || '' }) }
+    ];
+    let lastErr = null;
+    for (const s of sources) {
+      try {
+        const r = await fetch(s.url, { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        const loc = s.pick(d);
+        if (typeof loc.lat === 'number' && typeof loc.lon === 'number') return loc;
+        throw new Error('未返回坐标');
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('定位失败');
+  }
   async function initWeather() {
+    // 每次页面加载都重新拉取，天气随刷新更新
     try {
-      const cached = readWeatherCache();
-      if (cached) renderWeather(cached.city, cached.temp, cached.code);
-      let lat = null, lon = null, city = '';
-      if (navigator.geolocation) {
-        const pos = await new Promise((res, rej) => {
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000, maximumAge: 600000 });
-        });
-        lat = pos.coords.latitude; lon = pos.coords.longitude;
-        city = await fetchCityName(lat, lon);
-      }
-      if (lat == null) {
-        const ip = await fetch('https://ipapi.co/json/').then((r) => r.json());
-        lat = ip.latitude; lon = ip.longitude; city = ip.city || '';
-      }
-      const w = await fetchWeather(lat, lon);
+      const loc = await locateByIp();
+      let city = loc.city || '';
+      if (!city) city = await fetchCityName(loc.lat, loc.lon).catch(() => '');
+      const w = await fetchWeather(loc.lat, loc.lon);
       renderWeather(city, w.temp, w.code);
       writeWeatherCache({ city: city, temp: w.temp, code: w.code });
     } catch (e) {
-      const el = document.getElementById('weatherCard');
-      if (el && !el.querySelector('.mw-temp')) renderWeatherError('天气不可用');
+      const cached = readWeatherCache();
+      if (cached) renderWeather(cached.city, cached.temp, cached.code);
+      else renderWeatherError('天气不可用');
     }
   }
 

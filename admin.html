@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=20260832" />
+  <link rel="stylesheet" href="css/style.css?v=20260830" />
   <style>
     .admin { max-width: 1100px; margin: 0 auto; padding: 22px 20px 70px; }
     .admin h1 { font-size: 22px; margin: 0 0 4px; }
@@ -154,22 +154,6 @@
     @media (max-width: 900px) {
       .cache-ctl .cc-label { display: none; }
     }
-
-    /* 功能图标列表 */
-    .func-icons-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-    .func-icon-row {
-      display: flex; align-items: center; gap: 6px; padding: 6px 8px;
-      background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    }
-    .func-icon-row input { padding: 4px 6px; font-size: 12px; }
-    .func-icon-row .fi-name { flex: 1; }
-    .func-icon-row .fi-url { flex: 2; }
-    .func-icon-row .fi-icon { width: 64px; }
-    .func-icon-row .fi-del {
-      border: none; background: transparent; color: var(--muted);
-      cursor: pointer; font-size: 14px; padding: 2px 6px;
-    }
-    .func-icon-row .fi-del:hover { color: #e8543f; }
 
     /* 站点信息内的二级小标题 */
     .settings-section h5 {
@@ -535,7 +519,7 @@
         <h5>字体</h5>
         <div class="settings-row">
           <span class="srl">字体大小</span>
-          <input type="range" id="setFontSize" min="12" max="20" step="1" />
+          <input type="range" id="setFontSize" min="12" max="40" step="1" />
           <span id="setFontSizeVal" class="hint" style="min-width:42px;text-align:right">14px</span>
         </div>
         <div class="settings-row">
@@ -555,26 +539,6 @@
           字体栈写法示例：<code>"PingFang SC","Microsoft YaHei",sans-serif</code>
         </p>
 
-        <h5>背景板</h5>
-        <div class="settings-row">
-          <span class="srl">启用背景板</span>
-          <label class="switch"><input type="checkbox" id="setContentPanel"><span class="slider"></span></label>
-        </div>
-        <div class="settings-row">
-          <span class="srl">不透明度</span>
-          <input type="range" id="setContentPanelOpacity" min="0" max="1" step="0.05" />
-          <span id="setContentPanelOpacityVal" class="hint" style="min-width:42px;text-align:right">0.85</span>
-        </div>
-        <div class="settings-row">
-          <span class="srl">圆角</span>
-          <input type="range" id="setContentPanelRadius" min="0" max="28" />
-          <span id="setContentPanelRadiusVal" class="hint" style="min-width:32px;text-align:right">16</span>
-        </div>
-        <p class="settings-hint">背景板会在分类卡片区域下方垫一层半透明底色，开启壁纸时可显著提升文字可读性。</p>
-
-        <h5>功能图标</h5>
-        <div id="setFuncIcons" class="func-icons-list"></div>
-        <button class="btn sm ghost" id="addFuncIcon">＋ 添加功能图标</button>
       </div>
       <div class="settings-section">
         <h4>分类设置</h4>
@@ -788,6 +752,6 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/admin.js?v=20260832"></script>
+  <script src="js/admin.js?v=20260830"></script>
 </body>
 </html>

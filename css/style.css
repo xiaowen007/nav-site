@@ -331,25 +331,6 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 
-/* 功能图标 */
-.func-icons { display: inline-flex; gap: 4px; margin-left: 4px; }
-.func-icons a {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 6px 12px; border: 1px solid var(--border); border-radius: 18px;
-  font-size: 12px; color: var(--text); white-space: nowrap;
-}
-.func-icons a:hover { border-color: var(--primary); color: var(--primary); }
-
-/* 内容背景板：在内容区垫一层半透明底色，配壁纸时提升可读性 */
-body.content-panel .content {
-  background: rgba(255, 255, 255, var(--cp-opacity, .85));
-  border-radius: var(--cp-radius, 16px);
-  margin: 12px;
-}
-[data-theme="dark"] body.content-panel .content {
-  background: rgba(0, 0, 0, var(--cp-opacity, .85));
-}
-
 /* 壁纸：固定背景层 */
 /* 关键：html, body 默认有「不透明」背景（见顶部 html, body 规则）。
    负 z-index 的定位元素绘制在父元素背景「之下」，若不给 body 去掉背景色，
@@ -486,9 +467,6 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
   .hero h1 { font-size: 22px; }
-  /* 功能图标在空间不足时只保留图标 */
-  .func-icons a .fi-txt { display: none; }
-  .func-icons a { padding: 6px 10px; }
   /* 平板：顶栏收窄两个搜索框，按钮只留图标 */
   .ws-wrap { flex: 1 1 220px; max-width: 320px; }
   .search-box { flex: 0 1 160px; max-width: 190px; }
@@ -514,7 +492,6 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
   .al-txt { display: none; }
 
   .content { padding: 14px 12px 30px; }
-  body.content-panel .content { margin: 8px; padding: 14px 12px 30px; }
   .hero { text-align: center; }
   .hero h1 { font-size: 20px; }
   .hero p { font-size: 13px; }
