@@ -170,6 +170,25 @@
     });
   }
 
+  /* 分类排序：同级别按 order 升序（缺省按 name，中文 localeCompare）。
+     返回浅拷贝新树（递归排序 children），不修改原 state.data。
+     给某个分类加 "order": 数字（越小越前）即可手动置顶，缺省按 name 排。 */
+  function sortCats(list) {
+    const cmp = (a, b) => {
+      const oa = a.order, ob = b.order;
+      const ha = oa != null && oa !== '', hb = ob != null && ob !== '';
+      if (ha && hb) return (oa - ob) || String(a.name||'').localeCompare(String(b.name||''), 'zh-Hans-CN', { numeric: true });
+      if (ha) return -1;
+      if (hb) return 1;
+      return String(a.name||'').localeCompare(String(b.name||''), 'zh-Hans-CN', { numeric: true });
+    };
+    return [...list].sort(cmp).map(c => {
+      const nc = Object.assign({}, c);
+      if (c.children && c.children.length) nc.children = sortCats(c.children);
+      return nc;
+    });
+  }
+
   function buildSidebar() {
     const nav = $('#sideNav');
     // 保留“全部”按钮，注入分类
@@ -206,7 +225,7 @@
         nav.appendChild(a);
         if (children.length && !state.catCollapsed[c.id]) buildLevel(children, depth + 1);
       });
-    })(state.data.categories, 1);
+    })(sortCats(state.data.categories), 1);
     nav.querySelectorAll('.side-item').forEach((item) => {
       item.addEventListener('click', (e) => {
         const t = item.dataset.target;
@@ -251,7 +270,7 @@
     const allCls = 'top-nav-item';
     // 递归列出所有层级：1 级为主项，2/3 级缩进并略缩字号
     const navItems = [];
-    walkCats(state.data.categories, (c, depth) => {
+    walkCats(sortCats(state.data.categories), (c, depth) => {
       navItems.push('<a class="' + allCls + ' lv' + depth + '" data-target="' + escapeHtml(c.id) + '" href="#' + escapeHtml(c.id) + '">' +
         catIconHtml(c.icon, depth === 1 ? 16 : 14) + ' ' + escapeHtml(c.name) + '</a>');
     });
