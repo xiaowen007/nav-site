@@ -187,12 +187,13 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
 
 ### 防浏览器缓存：静态资源版本号由构建自动拨号（免手动 + 每日自动）
 - `index.html` / `admin.html` 里 `css/style.css`、`js/app.js`、`js/lunar.js`、`js/admin.js` 的 `?v=` 在**部署构建时自动生成**：
-  脚本 `scripts/version.js` 在每次构建时把所有 `?v=YYYYMMDD` 替换为**当天日期戳**（如 `20260830`），
-  因此每次部署 `?v=` 都会变，浏览器把「不同查询串」视为新文件、**自动拉取新文件**，无需手动 `Ctrl+F5` 强刷。
+  脚本 `scripts/version.js` 在每次构建时把所有 `?v=数字` 替换为**构建时间戳 `YYYYMMDDHHmm`**（如 `202608301930`），
+  因此每次部署 `?v=` 都会变（**同一天多次部署也会变**，避免当天第二版不生效），
+  浏览器把「不同查询串」视为新文件、**自动拉取新文件**，无需手动 `Ctrl+F5` 强刷。
 - **Cloudflare 设置**：后台 **Settings → Builds & deployments** 把 **Build command** 设为
   `node scripts/version.js`（Build output directory 仍为 `.`）。该脚本只改 html 里的 `?v=`，不产生其它产物。
 - **每日自动执行（无需手动 push）**：仓库已含 `.github/workflows/daily-version.yml`，
-  每天 **UTC 16:00（= 北京 0:00）** 自动跑 `scripts/version.js` 把 `?v=` 拨为当天日期并 push 到 `main`，
+  每天 **UTC 16:00（= 北京 0:00）** 自动跑 `scripts/version.js` 把 `?v=` 拨为构建时间戳并 push 到 `main`，
   由已绑定的 Cloudflare Pages（git push 触发）完成当日重新部署，使浏览器缓存每天自动失效。
   如需其它时间，改 workflow 里的 `cron: '0 16 * * *'` 即可；也可在 Actions 页面手动 **Run workflow** 立即触发。
 - ⚠️ 两层「生效」仍要分清：
