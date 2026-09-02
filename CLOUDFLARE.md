@@ -192,10 +192,23 @@ npm run dev:cf     # npx wrangler pages dev .  （KV/R2 用本地模拟存储）
   浏览器把「不同查询串」视为新文件、**自动拉取新文件**，无需手动 `Ctrl+F5` 强刷。
 - **Cloudflare 设置**：后台 **Settings → Builds & deployments** 把 **Build command** 设为
   `node scripts/version.js`（Build output directory 仍为 `.`）。该脚本只改 html 里的 `?v=`，不产生其它产物。
-- **每日自动执行（无需手动 push）**：仓库已含 `.github/workflows/daily-version.yml`，
-  每天 **UTC 16:00（= 北京 0:00）** 自动跑 `scripts/version.js` 把 `?v=` 拨为构建时间戳并 push 到 `main`，
-  由已绑定的 Cloudflare Pages（git push 触发）完成当日重新部署，使浏览器缓存每天自动失效。
-  如需其它时间，改 workflow 里的 `cron: '0 16 * * *'` 即可；也可在 Actions 页面手动 **Run workflow** 立即触发。
+- **每日自动重新部署**：两种做法，任选其一（目的：即使当天没改代码，也让 `?v=` 每天变一次）。
+
+  **方案 A：Deploy Hook + 外部定时（推荐，无需任何 PAT 权限）**
+  1. Cloudflare 后台 → Workers & Pages → nav-site → **Settings → Builds & deployments → Deploy hooks**
+     → Add deploy hook，命名如 `daily`，得到一个形如
+     `https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/xxxx` 的 URL（**当作密码保管，勿公开**）。
+  2. 用任意免费定时服务每天请求它一次即可触发重新部署，例如 cron-job.org（新建 job，URL 填上面的 hook，
+     频率选 Daily；请求方式用 POST 或 GET 均可）。
+  > 该 hook URL 只触发重新部署、不含任何写权限，泄露风险远低于 PAT；真泄露了在后台删掉重建即可。
+
+  **方案 B：GitHub Actions（需要带 workflow scope 的 PAT 才能推送）**
+  仓库根目录的 `.github/workflows/daily-version.yml` 已写好：每天 **UTC 16:00（= 北京 0:00）**
+  自动跑 `scripts/version.js` 把 `?v=` 拨为构建时间戳并 push 到 `main`，由 git push 触发重新部署。
+  改时间就改 `cron: '0 16 * * *'`；也可在 Actions 页面 **Run workflow** 立即触发。
+  > ⚠️ **该文件目前尚未推送到 GitHub**：GitHub 禁止用缺少 `workflow` scope 的 PAT 创建/更新 workflow 文件
+  > （`refusing to allow a Personal Access Token to create or update workflow ... without workflow scope`）。
+  > 换一枚勾选了 `workflow` scope 的 PAT 后推一次即可生效；在此之前不会有任何每日自动行为。
 - ⚠️ 两层「生效」仍要分清：
   1. **上线生效**：改了代码必须 `git push` → Cloudflare 自动重新部署（或手动 Redeploy），否则线上跑旧文件；
   2. **客户端生效**：`?v=` 因日期变化而不同，浏览器才会放弃缓存去拉新。
