@@ -302,7 +302,8 @@ function parseJSONCard(content, meta) {
 
 /* 无 AI 时的启发式识别 */
 function heuristicRecognize(meta, categories) {
-  let category = '常用推荐';
+  // 默认落到现有第一个分类（「常用推荐」已移除，此处若写死旧名会自动把分类重建回来）
+  let category = (Array.isArray(categories) && categories[0] && categories[0].name) || '未分类';
   const pool = (meta.title + ' ' + meta.hostname + ' ' + meta.desc).toLowerCase();
   const kwMap = {
     '社区咨询': ['社区', '论坛', 'news', '社区', 'bbs'],

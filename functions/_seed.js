@@ -1,5 +1,5 @@
 // 自动生成：KV 为空时的种子数据（来自 data/sites.json）
-// 由 scripts/gen-seed 生成，请勿手动编辑
+// 由 scripts/gen-seed.mjs 生成，请勿手动编辑
 export const SEED = {
   "site": {
     "title": "共享导航",
@@ -32,45 +32,6 @@ export const SEED = {
     "wallpaperBlur": 0
   },
   "categories": [
-    {
-      "id": "recommend",
-      "name": "常用推荐",
-      "icon": "⭐",
-      "links": [
-        {
-          "name": "百度",
-          "url": "https://www.baidu.com",
-          "desc": "全球最大中文搜索引擎",
-          "visits": 0
-        },
-        {
-          "name": "YouTube",
-          "url": "https://www.youtube.com",
-          "desc": "全球最大视频分享平台",
-          "visits": 0,
-          "icon": "https://icons.duckduckgo.com/ip3/youtube.com.ico"
-        },
-        {
-          "name": "GitHub",
-          "url": "https://github.com",
-          "desc": "全球最大代码托管与协作平台",
-          "visits": 0
-        },
-        {
-          "name": "微信网页版",
-          "url": "https://wx.qq.com",
-          "desc": "微信网页端入口",
-          "visits": 0
-        },
-        {
-          "name": "B 站",
-          "url": "https://www.bilibili.com",
-          "desc": "国内知名视频弹幕社区",
-          "visits": 0,
-          "icon": "https://icons.duckduckgo.com/ip3/bilibili.com.ico"
-        }
-      ]
-    },
     {
       "id": "community",
       "name": "社区咨询",

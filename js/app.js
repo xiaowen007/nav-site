@@ -132,6 +132,23 @@
     return await loadDataViaScript();
   }
 
+  /* 需要彻底移除的分类（按名称匹配，含子级）。
+   * 背景：数据层（data/sites.json、functions/_seed.js）已删除「常用推荐」，
+   * 但线上数据存在 Cloudflare KV 中，若 KV 里仍留有旧副本，仅改文件部署后不会生效。
+   * 这里在渲染前统一屏蔽，保证线上一定能去掉；日后若想恢复，清空此数组即可。
+   */
+  const HIDDEN_CATEGORY_NAMES = ['常用推荐'];
+  function dropHiddenCategories(data) {
+    if (!data || !Array.isArray(data.categories)) return;
+    const hide = (c) => HIDDEN_CATEGORY_NAMES.indexOf(c && c.name) >= 0;
+    const walk = (list) => list.filter((c) => {
+      if (!c || hide(c)) return false;
+      if (Array.isArray(c.children)) c.children = walk(c.children);
+      return true;
+    });
+    data.categories = walk(data.categories);
+  }
+
   async function loadData() {
     let fresh;
     try {
@@ -140,9 +157,11 @@
       const snap = readDataCache();
       if (!snap) throw new Error(e.message || '无法加载导航数据');
       state.data = snap; // 离线兜底：用上次快照渲染
+      dropHiddenCategories(state.data);
       return;
     }
     state.data = fresh;
+    dropHiddenCategories(state.data);
     // 缓存开关：开启才保留快照；关闭则清掉，保证每次都拿最新数据
     if (fresh.site && fresh.site.cacheEnabled === true) writeDataCache(fresh);
     else clearDataCache();
@@ -707,6 +726,9 @@
   let spyObserver = null;
   function initScrollSpy() {
     if (spyObserver) spyObserver.disconnect();
+    // 浏览器不支持 IntersectionObserver 时直接跳过：仅失去滚动高亮联动，
+    // 不能让它抛错中断 init()，否则天气/日期/侧栏都不会渲染
+    if (typeof IntersectionObserver === 'undefined') return;
     spyObserver = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
         if (en.isIntersecting && !state.keyword && state.view === 'sections') {
@@ -791,8 +813,11 @@
     renderSections();
     applySettings();
     updateFavCount();
-    initWeather();
+    // 首次加载：立即刷新天气与日期（「跟随网页刷新」优先）
+    refreshWeather(true);
     initCalendar();
+    // 定时自动刷新：跨天翻页 + 天气定时更新（页面长期挂着不刷新也能自动走）
+    startAutoRefresh();
   }
 
   /* ===== 天气模块（主页左上角） ===== */
@@ -827,7 +852,8 @@
   async function fetchWeather(lat, lon) {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
       '&current=temperature_2m,weather_code&timezone=auto';
-    const r = await fetch(url);
+    // no-store：避免浏览器/中间缓存把上一小时的温度原样返回，导致「刷新了但数字没变」
+    const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error('weather ' + r.status);
     const j = await r.json();
     const cur = j.current || {};
@@ -875,6 +901,7 @@
     }
     throw lastErr || new Error('定位失败');
   }
+  // 返回是否拉取成功，供自动刷新判定是否需要重试
   async function initWeather() {
     // 每次页面加载都重新拉取，天气随刷新更新
     try {
@@ -884,10 +911,12 @@
       const w = await fetchWeather(loc.lat, loc.lon);
       renderWeather(city, w.temp, w.code);
       writeWeatherCache({ city: city, temp: w.temp, code: w.code });
+      return true;
     } catch (e) {
       const cached = readWeatherCache();
       if (cached) renderWeather(cached.city, cached.temp, cached.code);
       else renderWeatherError('天气不可用');
+      return false;
     }
   }
 
@@ -934,6 +963,60 @@
       el.innerHTML = '<div class="mc-solar">' + (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + wd +
         '</div><div class="mc-sub">📅 农历获取失败</div>';
     }
+  }
+
+  /* ===== 自动刷新：日期跨天自动翻页 + 天气定时自动更新 =====
+   * 问题：initWeather / initCalendar 此前只在页面加载时执行一次，页面长期挂着不刷新的话，
+   *   过了零点日期不会翻页、天气也停在旧数据，看起来就是「未能自动更新」。
+   * 策略（以「跟随网页刷新」优先，定时器兜底）：
+   *   1. 每次页面加载/切回页面/网络恢复 → 立即或按需补刷；
+   *   2. 单一 ticker 每 30s 检测一次：跨天则重渲染日历，天气过期则重新拉取。
+   */
+  const WEATHER_TTL_MS = 30 * 60 * 1000;        // 天气自动刷新间隔
+  const WEATHER_VISIBLE_STALE_MS = 10 * 60 * 1000; // 切回页面时超过此时长才算过期、需要补刷
+  const AUTO_TICK_MS = 30 * 1000;               // 检测频率（跨天 + 天气过期）
+  let lastWeatherAt = 0;
+  let lastDateKey = dateKey();
+
+  function dateKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  // 跨天自动重渲染日历：过了零点无需手动刷新页面
+  function refreshCalendarIfDayChanged() {
+    const k = dateKey();
+    if (k === lastDateKey) return false;
+    lastDateKey = k;
+    initCalendar();
+    return true;
+  }
+
+  async function refreshWeather(force) {
+    const now = Date.now();
+    if (!force && lastWeatherAt && now - lastWeatherAt < WEATHER_TTL_MS) return;
+    lastWeatherAt = now;
+    const ok = await initWeather();
+    // 拉取失败时不占用刷新窗口，下一个 tick 会继续重试（网络恢复后自动补上）
+    if (!ok) lastWeatherAt = 0;
+  }
+
+  function startAutoRefresh() {
+    // 兜底 ticker：机器休眠醒来后 setInterval 可能漏跑，下面的 visibilitychange 会补
+    setInterval(() => {
+      refreshCalendarIfDayChanged();
+      refreshWeather(false);
+    }, AUTO_TICK_MS);
+
+    // 切回页面：过期即补刷（含跨天翻页）
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshCalendarIfDayChanged();
+      if (Date.now() - lastWeatherAt >= WEATHER_VISIBLE_STALE_MS) refreshWeather(true);
+    });
+
+    // 断网恢复：立即重试一次
+    window.addEventListener('online', () => { refreshWeather(true); });
   }
 
   document.addEventListener('DOMContentLoaded', init);
