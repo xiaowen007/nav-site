@@ -6,6 +6,11 @@ uploads/*
 # 上传请用 config.example.json 作为模板
 config.json
 
+# ── 本地账户与申请数据：含用户密码派生值，绝不入库 ──
+# 线上对应的数据存在 Cloudflare KV（键 accounts / applications），与本文件无关
+data/accounts.json
+data/applications.json
+
 # ── 系统 / 日志 ──
 .DS_Store
 Thumbs.db

@@ -1,9 +1,10 @@
 // POST /api/save -> 单条链接 upsert（管理后台“保存此卡片”，需管理员密码）
-import { loadData, saveData, sendJSON, requireAuth, upsertCard, readBody, bindingErrorResponse } from '../_lib.js';
+import { loadData, saveData, sendJSON, upsertCard, readBody, bindingErrorResponse } from '../_lib.js';
+import { requireAdmin } from '../_accounts.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!(await requireAuth(request, env))) {
+  if (!(await requireAdmin(request, env))) {
     return sendJSON({ error: '请先登录后台', needAuth: true }, 401);
   }
   let body;

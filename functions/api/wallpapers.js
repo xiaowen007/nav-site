@@ -1,6 +1,7 @@
 // GET /api/wallpapers?source=bing|360|wallhaven&page=1&q=关键词
-// 在线壁纸库：服务端（Worker）代理抓取，规避浏览器 CORS 限制（需登录）
-import { sendJSON, requireAuth } from '../_lib.js';
+// 在线壁纸库：服务端（Worker）代理抓取，规避浏览器 CORS 限制（需管理员）
+import { sendJSON } from '../_lib.js';
+import { requireAdmin } from '../_accounts.js';
 
 async function fetchJSON(url) {
   const controller = new AbortController();
@@ -58,7 +59,7 @@ async function fetchWallpapers(source, page, q) {
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  if (!(await requireAuth(request, env))) {
+  if (!(await requireAdmin(request, env))) {
     return sendJSON({ error: '请先登录后台', needAuth: true }, 401);
   }
   const url = new URL(request.url);

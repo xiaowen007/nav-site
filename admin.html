@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609022007" />
+  <link rel="stylesheet" href="css/style.css?v=202609210928" />
   <style>
     .admin { max-width: 1100px; margin: 0 auto; padding: 22px 20px 70px; }
     .admin h1 { font-size: 22px; margin: 0 0 4px; }
@@ -257,6 +257,37 @@
       padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .wp-empty { font-size: 12px; color: var(--muted); padding: 10px 0; }
+
+    /* 普通用户登录后台时的提示条 */
+    .role-notice {
+      margin: 12px 0; padding: 12px 14px;
+      border: 1px solid #e0a800; border-radius: 10px;
+      background: rgba(224, 168, 0, .1); color: var(--text);
+      font-size: 13px; line-height: 1.7;
+    }
+    /* 账户管理 / 申请审核 */
+    .row-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .row-tools input[type="text"] { max-width: 200px; }
+    .acct-list, .app-list { display: flex; flex-direction: column; gap: 8px; }
+    .row-card {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--panel);
+    }
+    .row-card .rc-main { flex: 1; min-width: 180px; }
+    .row-card .rc-title { font-size: 13.5px; font-weight: 600; }
+    .row-card .rc-sub { font-size: 12px; color: var(--muted); margin-top: 3px; word-break: break-all; }
+    .row-card .rc-ops { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag {
+      flex: none; padding: 2px 8px; border-radius: 10px; font-size: 11.5px;
+      border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
+    }
+    .tag.pending { border-color: #e0a800; color: #b8860b; background: rgba(224, 168, 0, .12); }
+    .tag.active { border-color: #1a9d5a; color: #1a9d5a; background: rgba(26, 157, 90, .12); }
+    .tag.rejected, .tag.danger { border-color: #d93025; color: #d93025; background: rgba(217, 48, 37, .08); }
+    .tag.admin { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+    .tag.self { border-color: var(--muted); }
+    .btn.sm.tiny { padding: 4px 9px; font-size: 11.5px; }
   </style>
 </head>
 <body>
@@ -316,6 +347,12 @@
     <a class="back" href="index.html">返回首页</a>
     <h1>导航站后台管理</h1>
     <p class="hint">在此可视化管理全部分类与链接：新增 / 编辑 / 删除 / 排序 / 批量转移，改完点「保存更改」整体写入。也支持 AI 自动收录、数据导入导出与配置。</p>
+
+    <!-- 普通用户登录后台时的提示：管理面板一律隐藏 -->
+    <div class="role-notice" id="roleNotice" style="display:none">
+      🔒 当前登录的是<strong>普通用户</strong>（<span id="roleNoticeUser"></span>），没有后台管理权限。
+      你可以到 <a href="index.html">首页</a> 的「我的账户」里提交「添加网站」申请，由管理员审核收录。
+    </div>
 
     <!-- ① 导航数据管理 -->
     <div class="panel">
@@ -714,8 +751,33 @@
       <span id="settingsSaveStatus" class="hint" style="margin-left:10px"></span>
           </div>
     </div>
-  </div>
+    <!-- ⑩ 账户管理 -->
+    <div class="panel">
+      <h2 class="ph-toggle" data-panel="10">⑩ 账户管理 <span id="acctPending" class="ai-status ai-off">0 待审核</span><span class="ph-arrow">▾</span></h2>
+      <div class="panel-body">
+        <p class="hint">访问者自助注册后处于「待审核」，通过后才能登录；也可随时禁用、提权为管理员或重置密码。</p>
+        <div class="row-tools">
+          <button class="btn sm ghost" id="acctReload">🔄 刷新</button>
+          <input type="text" id="acctFilter" placeholder="筛选账号 / 昵称" />
+          <span class="hint" id="acctStat"></span>
+        </div>
+        <div class="acct-list" id="acctList"><p class="hint">加载中…</p></div>
+      </div>
+    </div>
 
+    <!-- ⑪ 申请审核 -->
+    <div class="panel">
+      <h2 class="ph-toggle" data-panel="11">⑪ 申请审核 <span id="appPending" class="ai-status ai-off">0 待审核</span><span class="ph-arrow">▾</span></h2>
+      <div class="panel-body">
+        <p class="hint">普通用户提交的「添加网站」申请。通过时会自动收录进所选分类（同网址已存在则更新，不会产生重复条目）。</p>
+        <div class="row-tools">
+          <button class="btn sm ghost" id="appReload">🔄 刷新</button>
+          <span class="hint" id="appStat"></span>
+        </div>
+        <div class="app-list" id="appList"><p class="hint">加载中…</p></div>
+      </div>
+    </div>
+  </div>
   <!-- 分类编辑模态框（emoji / 上传 / 自动生图） -->
   <div class="modal-mask" id="catModal" style="display:none">
     <div class="modal">
@@ -752,6 +814,6 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/admin.js?v=202609022007"></script>
+  <script src="js/admin.js?v=202609210928"></script>
 </body>
 </html>

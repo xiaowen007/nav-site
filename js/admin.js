@@ -20,7 +20,13 @@
     sel: new Set(),          // 当前分类下已勾选的书签下标
     user: '',
     authRequired: true,
-    authConfigured: false
+    authConfigured: false,
+    // —— 账户体系 ——
+    isAdmin: false,          // 当前登录者是否管理员（由 applyRoleGate 写入）
+    role: null,              // 'admin' | 'user'
+    meUser: '',              // 当前登录账号名（用于识别「这是你」，避免误操作自己）
+    accounts: [],            // ⑩ 账户管理面板数据
+    applications: []         // ⑪ 申请审核面板数据
   };
 
   // 轻量提示条（顶部浮现，自动消失）
@@ -1627,9 +1633,259 @@
 
   /* ================= 主流程 ================= */
   async function main() {
+    // 角色门禁放在最前：普通用户直接返回，既不加载导航数据也不请求账户/申请接口
+    if (!(await applyRoleGate())) return;
     await loadData();
     populateSettings();
     await loadConfig();
+    // 管理员专属：账户列表 + 待审申请（并发拉取，失败不影响主流程）
+    await Promise.all([loadAccounts(), loadApplications()]);
+  }
+
+  /* ================= 账户管理 / 申请审核（仅管理员） =================
+   * 角色门禁：普通用户虽然能登录（比如从首页登进来），但后台的管理面板一律隐藏，
+   * 且服务端也会对 /api/accounts、/api/applications 审核动作返回 403。
+   */
+  const STATUS_TAG = { pending: '待审核', active: '正常', disabled: '已禁用', rejected: '未通过' };
+  const STATUS_TEXT_APP = { pending: '待审核', active: '已通过', rejected: '未通过', disabled: '已禁用' };
+
+  function fmtTime(ts) {
+    if (!ts) return '';
+    try { return new Date(ts).toLocaleString('zh-CN'); } catch (e) { return ''; }
+  }
+
+  async function applyRoleGate() {
+    let me = null;
+    try { me = await apiPublic('/api/auth/me', 'GET'); } catch (e) { me = null; }
+    // 未启用登录保护（ADMIN_REQUIRED=false）时后台整体开放，
+    // 必须与服务端 requireAdmin 的放行策略一致，否则本地开发会把所有面板误隐藏。
+    const openMode = !me || !me.required;
+    state.isAdmin = openMode ? true : !!me.isAdmin;
+    state.role = openMode ? 'admin' : ((me && me.role) || null);
+    state.meUser = (me && me.user) || state.user || '';
+
+    const notice = $('#roleNotice');
+    if (state.isAdmin) {
+      if (notice) notice.style.display = 'none';
+      return true;
+    }
+    // 非管理员：隐藏全部管理面板，只留提示
+    document.querySelectorAll('.panel').forEach((p) => { p.style.display = 'none'; });
+    if (notice) {
+      const u = $('#roleNoticeUser');
+      if (u) u.textContent = (me && (me.nickname || me.user)) || state.meUser;
+      notice.style.display = '';
+    }
+    return false;
+  }
+
+  /* ---------- 账户管理 ---------- */
+  async function loadAccounts() {
+    const box = $('#acctList');
+    if (!box) return;
+    box.innerHTML = '<p class="hint">加载中…</p>';
+    try {
+      const r = await api('/api/accounts', 'GET');
+      state.accounts = r.accounts || [];
+      const badge = $('#acctPending');
+      if (badge) {
+        badge.textContent = (r.pending || 0) + ' 待审核';
+        badge.className = 'ai-status ' + (r.pending ? 'ai-on' : 'ai-off');
+      }
+      const stat = $('#acctStat');
+      if (stat) stat.textContent = '共 ' + (r.total || 0) + ' 个账户';
+      renderAccounts();
+    } catch (e) {
+      box.innerHTML = '<p class="hint">读取失败：' + esc(e.message) + '</p>';
+    }
+  }
+
+  function renderAccounts() {
+    const box = $('#acctList');
+    if (!box) return;
+    const kw = (($('#acctFilter') && $('#acctFilter').value) || '').trim().toLowerCase();
+    let list = state.accounts || [];
+    if (kw) list = list.filter((a) => (a.username + ' ' + (a.nickname || '')).toLowerCase().includes(kw));
+    if (!list.length) { box.innerHTML = '<p class="hint">' + (kw ? '没有匹配的账户' : '暂无注册账户') + '</p>'; return; }
+
+    box.innerHTML = list.map((a) => {
+      const isSelf = a.username === state.meUser;
+      const ops = [];
+      if (a.status === 'pending') {
+        ops.push('<button class="btn sm tiny" data-act="approve" data-id="' + esc(a.id) + '">✓ 通过审核</button>');
+        ops.push('<button class="btn sm tiny ghost" data-act="reject" data-id="' + esc(a.id) + '">✕ 驳回</button>');
+      }
+      if (a.status === 'active') {
+        ops.push('<button class="btn sm tiny ghost" data-act="disable" data-id="' + esc(a.id) + '">禁用</button>');
+      }
+      if (a.status === 'disabled' || a.status === 'rejected') {
+        ops.push('<button class="btn sm tiny" data-act="enable" data-id="' + esc(a.id) + '">恢复正常</button>');
+      }
+      if (a.status === 'active' || a.status === 'pending') {
+        if (a.role === 'admin') {
+          ops.push('<button class="btn sm tiny ghost" data-act="demote" data-id="' + esc(a.id) + '">降为普通用户</button>');
+        } else {
+          ops.push('<button class="btn sm tiny ghost" data-act="promote" data-id="' + esc(a.id) + '">设为管理员</button>');
+        }
+      }
+      ops.push('<button class="btn sm tiny ghost" data-act="resetPassword" data-id="' + esc(a.id) + '">重置密码</button>');
+      ops.push('<button class="btn sm tiny ghost" data-act="remove" data-id="' + esc(a.id) + '">删除</button>');
+
+      return '<div class="row-card">' +
+        '<div class="rc-main">' +
+          '<div class="rc-title">' + esc(a.nickname || a.username) +
+            ' <span class="tag ' + esc(a.role) + '">' + (a.role === 'admin' ? '管理员' : '普通用户') + '</span>' +
+            (isSelf ? ' <span class="tag self">这是你</span>' : '') +
+          '</div>' +
+          '<div class="rc-sub">账号 ' + esc(a.username) +
+            ' · 注册于 ' + esc(fmtTime(a.createdAt)) +
+            (a.lastLoginAt ? ' · 最近登录 ' + esc(fmtTime(a.lastLoginAt)) : '') +
+            (a.note ? ' · 备注：' + esc(a.note) : '') +
+          '</div>' +
+        '</div>' +
+        '<span class="tag ' + esc(a.status) + '">' + esc(a.statusText || STATUS_TAG[a.status] || a.status) + '</span>' +
+        '<div class="rc-ops">' + ops.join('') + '</div>' +
+      '</div>';
+    }).join('');
+
+    box.querySelectorAll('[data-act]').forEach((b) => {
+      b.addEventListener('click', () => onAcctAction(b.getAttribute('data-act'), b.getAttribute('data-id')));
+    });
+  }
+
+  async function onAcctAction(action, id) {
+    const acc = (state.accounts || []).find((a) => a.id === id);
+    if (!acc) return;
+    const label = { approve: '通过审核', reject: '驳回注册', disable: '禁用', enable: '恢复正常',
+      promote: '设为管理员', demote: '降为普通用户', resetPassword: '重置密码', remove: '删除' }[action] || action;
+
+    if (action === 'remove') {
+      if (!confirm('确定删除账户「' + acc.username + '」？该操作不可恢复。')) return;
+      try {
+        await api('/api/accounts/' + encodeURIComponent(id), 'DELETE');
+        await loadAccounts();
+      } catch (e) { alert('删除失败：' + e.message); }
+      return;
+    }
+
+    const body = { action };
+    if (action === 'reject') {
+      const note = prompt('请填写驳回理由（会展示给该用户，可留空）', '') || '';
+      body.note = note;
+    }
+    if (action === 'resetPassword') {
+      const pwd = prompt('请输入该账户的新密码（至少 6 位）', '');
+      if (!pwd) return;
+      body.password = pwd;
+    }
+    if (action === 'disable' && !confirm('确定禁用「' + acc.username + '」？其登录状态会立即失效。')) return;
+
+    try {
+      await api('/api/accounts/' + encodeURIComponent(id), 'PATCH', body);
+      await loadAccounts();
+    } catch (e) { alert(label + '失败：' + e.message); }
+  }
+
+  /* ---------- 申请审核 ---------- */
+  function categoryOptions(selected) {
+    const cats = (state.data && state.data.categories) || [];
+    return '<option value="">选择归类…</option>' + cats.map((c) =>
+      '<option value="' + esc(c.name) + '"' + (c.name === selected ? ' selected' : '') + '>' + esc(c.name) + '</option>'
+    ).join('');
+  }
+
+  async function loadApplications() {
+    const box = $('#appList');
+    if (!box) return;
+    box.innerHTML = '<p class="hint">加载中…</p>';
+    try {
+      const r = await api('/api/applications', 'GET');
+      state.applications = r.applications || [];
+      const badge = $('#appPending');
+      if (badge) {
+        badge.textContent = (r.pending || 0) + ' 待审核';
+        badge.className = 'ai-status ' + (r.pending ? 'ai-on' : 'ai-off');
+      }
+      const stat = $('#appStat');
+      if (stat) stat.textContent = '共 ' + (r.total || 0) + ' 条申请';
+      renderApplications();
+    } catch (e) {
+      box.innerHTML = '<p class="hint">读取失败：' + esc(e.message) + '</p>';
+    }
+  }
+
+  function renderApplications() {
+    const box = $('#appList');
+    if (!box) return;
+    const list = state.applications || [];
+    if (!list.length) { box.innerHTML = '<p class="hint">暂无用户申请</p>'; return; }
+
+    box.innerHTML = list.map((a) => {
+      const ops = [];
+      if (a.status === 'pending') {
+        ops.push('<select class="app-cat" data-id="' + esc(a.id) + '">' + categoryOptions(a.category) + '</select>');
+        ops.push('<button class="btn sm tiny" data-app-act="approve" data-id="' + esc(a.id) + '">✓ 通过并收录</button>');
+        ops.push('<button class="btn sm tiny ghost" data-app-act="reject" data-id="' + esc(a.id) + '">✕ 驳回</button>');
+      } else {
+        ops.push('<button class="btn sm tiny ghost" data-app-act="remove" data-id="' + esc(a.id) + '">删除记录</button>');
+      }
+      return '<div class="row-card">' +
+        '<div class="rc-main">' +
+          '<div class="rc-title">' + esc(a.name || '(未命名)') +
+            (a.category ? ' <span class="tag">建议：' + esc(a.category) + '</span>' : '') +
+          '</div>' +
+          '<div class="rc-sub"><a href="' + esc(a.url) + '" target="_blank" rel="noopener noreferrer">' + esc(a.url) + '</a>' +
+            (a.desc ? '<br/>' + esc(a.desc) : '') +
+            '<br/>由 ' + esc(a.nickname || a.username) + ' 提交于 ' + esc(fmtTime(a.createdAt)) +
+            (a.reviewer ? ' · ' + esc(a.reviewer) + ' 已处理' : '') +
+            (a.note ? ' · 意见：' + esc(a.note) : '') +
+          '</div>' +
+        '</div>' +
+        '<span class="tag ' + esc(a.status === 'active' ? 'active' : a.status) + '">' +
+          esc(STATUS_TEXT_APP[a.status] || a.statusText || a.status) + '</span>' +
+        '<div class="rc-ops">' + ops.join('') + '</div>' +
+      '</div>';
+    }).join('');
+
+    box.querySelectorAll('[data-app-act]').forEach((b) => {
+      b.addEventListener('click', () => onAppAction(b.getAttribute('data-app-act'), b.getAttribute('data-id'), box));
+    });
+  }
+
+  async function onAppAction(action, id, box) {
+    if (action === 'remove') {
+      if (!confirm('删除这条申请记录？')) return;
+      try {
+        await api('/api/applications/' + encodeURIComponent(id), 'DELETE');
+        await loadApplications();
+      } catch (e) { alert('删除失败：' + e.message); }
+      return;
+    }
+    if (action === 'reject') {
+      const note = prompt('请填写驳回理由（会展示给提交者，可留空）', '') || '';
+      try {
+        await api('/api/applications/' + encodeURIComponent(id), 'PATCH', { action: 'reject', note });
+        await loadApplications();
+      } catch (e) { alert('驳回失败：' + e.message); }
+      return;
+    }
+    // 通过：取该行选中的分类
+    const sel = box.querySelector('select.app-cat[data-id="' + id + '"]');
+    const category = sel ? sel.value : '';
+    if (!category) { alert('请先选择要收录到哪个分类'); return; }
+    try {
+      const r = await api('/api/applications/' + encodeURIComponent(id), 'PATCH', { action: 'approve', category });
+      alert(r.message || '已通过并收录');
+      await loadApplications();
+      await loadAll();   // 重新拉导航数据，让①面板立刻能看到新增链接
+    } catch (e) { alert('通过失败：' + e.message); }
+  }
+
+  function bindAccountsUI() {
+    const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
+    on('#acctReload', 'click', () => loadAccounts());
+    on('#acctFilter', 'input', () => renderAccounts());
+    on('#appReload', 'click', () => loadApplications());
   }
 
   function bindAll() {
@@ -1637,6 +1893,7 @@
     bindTheme();
     bindSettings();
     bindCollapse();
+    bindAccountsUI();   // ⑩ 账户管理 / ⑪ 申请审核 的刷新与筛选（元素缺失时内部自动跳过）
 
     $('#addCat').addEventListener('click', addCat);
     $('#addLink').addEventListener('click', addLink);

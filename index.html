@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609022007" />
+  <link rel="stylesheet" href="css/style.css?v=202609210928" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -35,6 +35,9 @@
     </div>
 
     <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
+    <button class="acct-btn" id="acctBtn" title="登录 / 注册 / 我的申请">
+      <span id="acctIcon">👤</span><span class="acct-txt" id="acctTxt">登录</span>
+    </button>
     <a class="admin-link" href="admin.html" title="AI 自动收录 / 管理">＋<span class="al-txt"> AI 收录</span></a>
   </header>
 
@@ -69,6 +72,66 @@
     </main>
   </div>
 
+  <!-- 登录 / 注册 弹窗（访问者账户） -->
+  <div class="modal-mask" id="authMask" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="登录或注册">
+      <button class="modal-x" id="authX" title="关闭">✕</button>
+      <div class="modal-tabs">
+        <button class="mtab active" id="tabLogin" type="button">登录</button>
+        <button class="mtab" id="tabRegister" type="button">注册</button>
+      </div>
+
+      <div class="mpane" id="paneLogin">
+        <label class="fl" for="loginUser">账号</label>
+        <input type="text" id="loginUser" placeholder="账号" autocomplete="username" />
+        <label class="fl" for="loginPwd">密码</label>
+        <input type="password" id="loginPwd" placeholder="密码" autocomplete="current-password" />
+        <label class="chk"><input type="checkbox" id="loginRemember" checked /> 记住登录（30 天）</label>
+        <button class="btn primary block" id="doLogin" type="button">登录</button>
+        <p class="modal-msg" id="loginMsg"></p>
+      </div>
+
+      <div class="mpane hidden" id="paneRegister">
+        <label class="fl" for="regUser">账号</label>
+        <input type="text" id="regUser" placeholder="3-20 位字母、数字、下划线" autocomplete="username" />
+        <label class="fl" for="regNick">昵称（可选）</label>
+        <input type="text" id="regNick" placeholder="显示用的名字" />
+        <label class="fl" for="regPwd">密码</label>
+        <input type="password" id="regPwd" placeholder="至少 6 位" autocomplete="new-password" />
+        <label class="fl" for="regReason">申请说明（可选）</label>
+        <input type="text" id="regReason" placeholder="简单说明来意，便于管理员审核" />
+        <button class="btn primary block" id="doRegister" type="button">提交注册</button>
+        <p class="hint">注册后需管理员审核通过才能登录。</p>
+        <p class="modal-msg" id="regMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 用户中心弹窗（提交申请 / 查看我的申请） -->
+  <div class="modal-mask" id="userMask" hidden>
+    <div class="modal wide" role="dialog" aria-modal="true" aria-label="我的账户">
+      <button class="modal-x" id="userX" title="关闭">✕</button>
+      <h4 class="modal-title">我的账户 <span class="who" id="userWho"></span></h4>
+      <div class="modal-actions">
+        <button class="btn sm ghost" id="goAdmin" type="button" hidden>进入后台</button>
+        <button class="btn sm ghost" id="doLogout" type="button">退出登录</button>
+      </div>
+
+      <h5 class="sub">申请添加网站</h5>
+      <div class="apply-form">
+        <input type="text" id="appUrl" placeholder="网址（如 example.com）" />
+        <input type="text" id="appName" placeholder="名称（留空自动抓取）" />
+        <input type="text" id="appDesc" placeholder="简介（可选）" />
+        <select id="appCat" title="建议归类"><option value="">建议分类（可选）</option></select>
+        <button class="btn primary" id="doApply" type="button">提交申请</button>
+      </div>
+      <p class="modal-msg" id="applyMsg"></p>
+
+      <h5 class="sub">我的申请</h5>
+      <div class="apply-list" id="myApps"><p class="hint">暂无申请记录</p></div>
+    </div>
+  </div>
+
   <script>
     /* 主题初始化：localStorage 优先，否则跟随系统 */
     (function () {
@@ -79,7 +142,7 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202609022007"></script>
-  <script src="js/app.js?v=202609022007"></script>
+  <script src="js/lunar.js?v=202609210928"></script>
+  <script src="js/app.js?v=202609210928"></script>
 </body>
 </html>

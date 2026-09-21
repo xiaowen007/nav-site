@@ -1,0 +1,44 @@
+name: Daily version bump & deploy
+
+# 每日自动把静态资源版本号 ?v= 拨为当天日期，并推送到 main，
+# 由已绑定的 Cloudflare Pages（GitHub push 触发）完成当日重新部署。
+# 这样浏览器缓存每天自动失效、拉取最新资源，无需人工手改 ?v=。
+on:
+  schedule:
+    # UTC 16:00 = 北京 0:00。此时 Cloudflare 构建环境（UTC）日期已翻到新的一天，
+    # ?v= 与「北京每日」对齐。如需其它时间，改这里即可。
+    - cron: '0 16 * * *'
+  workflow_dispatch: {}   # 允许在 Actions 页面手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bump version (?v= to today)
+        run: node scripts/version.js
+
+      - name: Commit & push (triggers Cloudflare deploy)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "chore: daily version bump ?v=$(date +%Y%m%d)"
+            git pull --rebase origin main
+            git push origin main
+          else
+            echo "today's ?v= already up to date, nothing to push"
+          fi

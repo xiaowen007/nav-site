@@ -796,6 +796,270 @@
     });
   }
 
+  /* ===== 账户体系：登录 / 注册 / 用户中心（提交「添加网站」申请） =====
+   * 与后台 admin.html 共用同一个 token 存储键，登录一次两处通用。
+   * 普通用户登录后能提交申请、查看审核进度；改动导航数据仍只允许管理员。
+   */
+  const TOKEN_KEY = 'navAdminToken';
+
+  function getToken() {
+    try { return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || ''; }
+    catch (e) { return ''; }
+  }
+  function setToken(tok, remember) {
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+      if (!tok) return;
+      if (remember) localStorage.setItem(TOKEN_KEY, tok);
+      else sessionStorage.setItem(TOKEN_KEY, tok);
+    } catch (e) {}
+  }
+  // 带鉴权的请求：非 2xx 一律抛错，调用方按 e.status / e.message 决定提示
+  async function apiAuth(path, method, body) {
+    const opt = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
+    const t = getToken();
+    if (t) opt.headers['Authorization'] = 'Bearer ' + t;
+    if (body) opt.body = JSON.stringify(body);
+    const res = await fetch(path, opt);
+    let j = null;
+    try { j = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      const err = new Error((j && j.error) || ('请求失败（' + res.status + '）'));
+      err.status = res.status;
+      err.data = j || {};
+      throw err;
+    }
+    return j || {};
+  }
+
+  let acct = { loggedIn: false, user: null, role: null, isAdmin: false };
+  function openMask(el) { if (el) el.hidden = false; }
+  function closeMask(el) { if (el) el.hidden = true; }
+  function maskMsg(el, text, kind) {
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'modal-msg' + (kind ? ' ' + kind : '');
+  }
+
+  async function initAccount() {
+    bindAccountUI();
+    try { acct = await apiAuth('/api/auth/me'); }
+    catch (e) { /* 离线 / 未部署 Functions：按未登录处理，不影响浏览 */ }
+    renderAcctBtn();
+    fillApplyCategories();
+  }
+  function renderAcctBtn() {
+    const btn = $('#acctBtn'), txt = $('#acctTxt'), icon = $('#acctIcon');
+    if (!btn) return;
+    if (acct.loggedIn) {
+      btn.classList.add('logged');
+      if (txt) txt.textContent = acct.nickname || acct.user;
+      if (icon) icon.textContent = acct.isAdmin ? '🛡️' : '👤';
+      btn.title = (acct.isAdmin ? '管理员' : '普通用户') + '：' + acct.user + '（点击打开我的账户）';
+    } else {
+      btn.classList.remove('logged');
+      if (txt) txt.textContent = '登录';
+      if (icon) icon.textContent = '👤';
+      btn.title = '登录 / 注册';
+    }
+  }
+  // 申请表单里的「建议分类」用现有分类填充，避免用户凭空造分类
+  function fillApplyCategories() {
+    const sel = $('#appCat');
+    if (!sel) return;
+    const cats = (state.data && state.data.categories) || [];
+    sel.innerHTML = '<option value="">建议分类（可选）</option>' +
+      cats.map((c) => '<option value="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</option>').join('');
+  }
+
+  function switchAuthTab(which) {
+    const isLogin = which !== 'register';
+    const tl = $('#tabLogin'), tr = $('#tabRegister');
+    if (tl) tl.classList.toggle('active', isLogin);
+    if (tr) tr.classList.toggle('active', !isLogin);
+    const pl = $('#paneLogin'), pr = $('#paneRegister');
+    if (pl) pl.classList.toggle('hidden', !isLogin);
+    if (pr) pr.classList.toggle('hidden', isLogin);
+  }
+
+  function bindAccountUI() {
+    const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
+
+    on('#acctBtn', 'click', () => {
+      if (acct.loggedIn) openUserCenter();
+      else { switchAuthTab('login'); openMask($('#authMask')); }
+    });
+    on('#authX', 'click', () => closeMask($('#authMask')));
+    on('#userX', 'click', () => closeMask($('#userMask')));
+    // 点遮罩空白处关闭
+    on('#authMask', 'click', (e) => { if (e.target === $('#authMask')) closeMask($('#authMask')); });
+    on('#userMask', 'click', (e) => { if (e.target === $('#userMask')) closeMask($('#userMask')); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      closeMask($('#authMask')); closeMask($('#userMask'));
+    });
+
+    on('#tabLogin', 'click', () => switchAuthTab('login'));
+    on('#tabRegister', 'click', () => switchAuthTab('register'));
+    on('#doLogin', 'click', doLogin);
+    on('#doRegister', 'click', doRegister);
+    on('#doApply', 'click', doApply);
+    on('#doLogout', 'click', doLogout);
+    on('#goAdmin', 'click', () => { location.href = 'admin.html'; });
+
+    // 回车提交
+    ['loginUser', 'loginPwd'].forEach((id) => on('#' + id, 'keydown', (e) => { if (e.key === 'Enter') doLogin(); }));
+    ['regUser', 'regNick', 'regPwd', 'regReason'].forEach((id) => on('#' + id, 'keydown', (e) => { if (e.key === 'Enter') doRegister(); }));
+    on('#appUrl', 'keydown', (e) => { if (e.key === 'Enter') doApply(); });
+    on('#appName', 'keydown', (e) => { if (e.key === 'Enter') doApply(); });
+  }
+
+  async function doLogin() {
+    const user = ($('#loginUser') && $('#loginUser').value || '').trim();
+    const password = ($('#loginPwd') && $('#loginPwd').value) || '';
+    const remember = !!($('#loginRemember') && $('#loginRemember').checked);
+    if (!user || !password) return maskMsg($('#loginMsg'), '请填写账号和密码', 'err');
+
+    const btn = $('#doLogin'); if (btn) btn.disabled = true;
+    maskMsg($('#loginMsg'), '登录中…');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user, password, remember })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) return maskMsg($('#loginMsg'), j.error || '登录失败', 'err');
+      setToken(j.token, remember);
+      acct = { loggedIn: true, user: j.user, role: j.role, isAdmin: j.role === 'admin', nickname: j.nickname || j.user };
+      renderAcctBtn();
+      maskMsg($('#loginMsg'), '');
+      const pw = $('#loginPwd'); if (pw) pw.value = '';
+      closeMask($('#authMask'));
+      openUserCenter();
+    } catch (e) {
+      maskMsg($('#loginMsg'), '网络错误：' + e.message, 'err');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function doRegister() {
+    const username = ($('#regUser') && $('#regUser').value || '').trim();
+    const password = ($('#regPwd') && $('#regPwd').value) || '';
+    const nickname = ($('#regNick') && $('#regNick').value || '').trim();
+    const reason = ($('#regReason') && $('#regReason').value || '').trim();
+    if (!username || !password) return maskMsg($('#regMsg'), '请填写账号和密码', 'err');
+
+    const btn = $('#doRegister'); if (btn) btn.disabled = true;
+    maskMsg($('#regMsg'), '提交中…');
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, nickname, reason })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) return maskMsg($('#regMsg'), j.error || '注册失败', 'err');
+      maskMsg($('#regMsg'), j.message || '注册成功，等待管理员审核', 'ok');
+      const rp = $('#regPwd'); if (rp) rp.value = '';
+      // 顺手把账号填到登录框，审核通过后可直接登录
+      const lu = $('#loginUser'); if (lu) lu.value = username;
+    } catch (e) {
+      maskMsg($('#regMsg'), '网络错误：' + e.message, 'err');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function openUserCenter() {
+    const who = $('#userWho');
+    if (who) who.textContent = (acct.nickname || acct.user || '') + (acct.isAdmin ? '（管理员）' : '（普通用户）');
+    const ga = $('#goAdmin');
+    if (ga) ga.hidden = !acct.isAdmin;   // 普通用户不显示后台入口
+    fillApplyCategories();
+    openMask($('#userMask'));
+    loadMyApps();
+  }
+
+  async function loadMyApps() {
+    const box = $('#myApps');
+    if (!box) return;
+    box.innerHTML = '<p class="hint">加载中…</p>';
+    try {
+      const r = await apiAuth('/api/applications');
+      const list = r.applications || [];
+      if (!list.length) { box.innerHTML = '<p class="hint">暂无申请记录</p>'; return; }
+      box.innerHTML = list.map(renderAppItem).join('');
+      box.querySelectorAll('[data-withdraw]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          try {
+            await apiAuth('/api/applications/' + encodeURIComponent(b.getAttribute('data-withdraw')), 'PATCH', { action: 'withdraw' });
+            maskMsg($('#applyMsg'), '已撤回', 'ok');
+            loadMyApps();
+          } catch (e) {
+            b.disabled = false;
+            maskMsg($('#applyMsg'), e.message, 'err');
+          }
+        });
+      });
+    } catch (e) {
+      box.innerHTML = '<p class="hint">' + escapeHtml(e.message) + '</p>';
+    }
+  }
+
+  function renderAppItem(a) {
+    const CAT_TEXT = { pending: '待审核', active: '已通过', rejected: '未通过', disabled: '已禁用' };
+    const label = CAT_TEXT[a.status] || a.statusText || a.status;
+    const cat = a.category ? ' → ' + escapeHtml(a.category) : '';
+    const time = a.createdAt ? new Date(a.createdAt).toLocaleString('zh-CN') : '';
+    const note = a.note ? '<div class="ai-note">审核意见：' + escapeHtml(a.note) + '</div>' : '';
+    return '<div class="apply-item"><div class="ai-main">' +
+      '<div class="ai-name">' + escapeHtml(a.name || '') + cat + '</div>' +
+      '<div class="ai-url">' + escapeHtml(a.url || '') + '</div>' +
+      (time ? '<div class="ai-note">' + escapeHtml(time) + '</div>' : '') + note +
+      '</div><span class="badge ' + escapeHtml(a.status) + '">' + escapeHtml(label) + '</span>' +
+      (a.status === 'pending'
+        ? '<button class="btn sm ghost" data-withdraw="' + escapeHtml(a.id) + '">撤回</button>'
+        : '') +
+      '</div>';
+  }
+
+  async function doApply() {
+    const url = ($('#appUrl') && $('#appUrl').value || '').trim();
+    if (!url) return maskMsg($('#applyMsg'), '请填写网址', 'err');
+    const body = {
+      url,
+      name: ($('#appName') && $('#appName').value || '').trim(),
+      desc: ($('#appDesc') && $('#appDesc').value || '').trim(),
+      category: ($('#appCat') && $('#appCat').value) || ''
+    };
+    const btn = $('#doApply'); if (btn) btn.disabled = true;
+    maskMsg($('#applyMsg'), '提交中…');
+    try {
+      const r = await apiAuth('/api/applications', 'POST', body);
+      maskMsg($('#applyMsg'), r.message || '已提交，等待管理员审核', 'ok');
+      ['#appUrl', '#appName', '#appDesc'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
+      loadMyApps();
+    } catch (e) {
+      if (e.status === 401) {
+        maskMsg($('#applyMsg'), '登录已失效，请重新登录', 'err');
+        setToken(''); acct = { loggedIn: false }; renderAcctBtn();
+      } else {
+        maskMsg($('#applyMsg'), e.message, 'err');
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function doLogout() {
+    setToken('');
+    acct = { loggedIn: false, user: null, role: null, isAdmin: false };
+    renderAcctBtn();
+    closeMask($('#userMask'));
+  }
+
   async function init() {
     bindUI();
     try {
@@ -813,6 +1077,8 @@
     renderSections();
     applySettings();
     updateFavCount();
+    // 账户：绑定登录/注册/用户中心交互，并读取当前身份（未登录或接口不可用都不影响浏览）
+    initAccount();
     // 首次加载：立即刷新天气与日期（「跟随网页刷新」优先）
     refreshWeather(true);
     initCalendar();

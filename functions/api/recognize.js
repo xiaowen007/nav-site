@@ -1,9 +1,10 @@
 // POST /api/recognize -> 抓取目标网址并识别为导航卡片（AI 或启发式，需管理员密码）
-import { loadData, sendJSON, requireAuth, fetchMeta, aiRecognize, heuristicRecognize, loadConfig, readBody } from '../_lib.js';
+import { loadData, sendJSON, fetchMeta, aiRecognize, heuristicRecognize, loadConfig, readBody } from '../_lib.js';
+import { requireAdmin } from '../_accounts.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!(await requireAuth(request, env))) {
+  if (!(await requireAdmin(request, env))) {
     return sendJSON({ error: '需要管理员密码', needAuth: true }, 401);
   }
   let body;

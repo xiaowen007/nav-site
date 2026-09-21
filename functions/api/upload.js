@@ -1,9 +1,10 @@
 // POST /api/upload -> 接收 base64 图片，写入 R2，返回 /uploads/xxx 访问地址（需管理员密码）
-import { sendJSON, requireAuth, readBody, b64ToArrayBuffer, UPLOAD_MIME, requireR2, bindingErrorResponse } from '../_lib.js';
+import { sendJSON, readBody, b64ToArrayBuffer, UPLOAD_MIME, requireR2, bindingErrorResponse } from '../_lib.js';
+import { requireAdmin } from '../_accounts.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!(await requireAuth(request, env))) {
+  if (!(await requireAdmin(request, env))) {
     return sendJSON({ error: '请先登录后台', needAuth: true }, 401);
   }
   let body;

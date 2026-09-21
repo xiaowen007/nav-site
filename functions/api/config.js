@@ -1,11 +1,12 @@
-// GET  /api/config -> 返回当前 AI/鉴权配置（不含密钥明文，需登录）
-// POST /api/config -> 更新配置并写入 KV（需登录）
-import { loadConfig, saveConfig, sendJSON, requireAuth, readBody, bindingErrorResponse } from '../_lib.js';
+// GET  /api/config -> 返回当前 AI/鉴权配置（不含密钥明文，需管理员）
+// POST /api/config -> 更新配置并写入 KV（需管理员）
+import { loadConfig, saveConfig, sendJSON, readBody, bindingErrorResponse } from '../_lib.js';
+import { requireAdmin } from '../_accounts.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
   // 配置含 AI 接口地址等敏感信息，仅登录后可读取
-  if (!(await requireAuth(request, env))) {
+  if (!(await requireAdmin(request, env))) {
     return sendJSON({ error: '请先登录后台', needAuth: true }, 401);
   }
   const cfg = await loadConfig(env);
@@ -22,7 +23,7 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!(await requireAuth(request, env))) {
+  if (!(await requireAdmin(request, env))) {
     return sendJSON({ error: '请先登录后台', needAuth: true }, 401);
   }
   let body;

@@ -171,12 +171,14 @@ async function hmacKey(secret) {
   );
 }
 
-export async function issueToken(env, user, remember) {
+export async function issueToken(env, user, remember, role) {
   const cfg = await ensureSessionSecret(env);
   const exp = Date.now() + (remember ? TOKEN_TTL : SESSION_TTL_SHORT);
-  const payload = b64urlEncode(JSON.stringify({ u: user, exp }));
+  // r = 角色。注意：鉴权时角色仍以「库里账户的当前角色」为准（见 _accounts.js 的
+  // resolveIdentity），token 里的 r 只是签发时的快照，便于识别超级管理员。
+  const payload = b64urlEncode(JSON.stringify({ u: user, r: role === 'user' ? 'user' : 'admin', exp }));
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(cfg.SESSION_SECRET), new TextEncoder().encode(payload));
-  return { token: payload + '.' + toB64url(sig), exp, user };
+  return { token: payload + '.' + toB64url(sig), exp, user, role: role === 'user' ? 'user' : 'admin' };
 }
 
 export async function verifyTokenRaw(env, token) {
@@ -200,6 +202,10 @@ export function tokenFromRequest(request) {
   return request.headers.get('x-admin-token') || '';
 }
 
+/* ⚠️ 注意：本函数只判断「是否已登录」，不区分角色。
+ * 引入普通用户账户体系后，普通用户也能通过它。
+ * 所有管理类写操作（sites/save/config/upload/recognize/wallpapers）必须改用
+ * _accounts.js 里的 requireAdmin()，否则普通用户登录后即可修改导航数据。 */
 export async function requireAuth(request, env) {
   // 未绑定 KV（部署后尚未手动绑定）：开放只读访问，避免后台完全锁死；
   // 写操作会因缺 KV 返回“未绑定”提示，绑定后自动恢复正常鉴权。

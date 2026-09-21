@@ -82,10 +82,13 @@ function signPayload(payload) {
   return crypto.createHmac('sha256', CFG.SESSION_SECRET).update(payload).digest('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function issueToken(user, ttlMs, remember) {
+function issueToken(user, ttlMs, remember, role) {
   const exp = Date.now() + (ttlMs || (remember ? TOKEN_TTL : 12 * 3600 * 1000));
-  const payload = b64url(JSON.stringify({ u: user, exp }));
-  return { token: payload + '.' + signPayload(payload), exp, user };
+  // r = 角色快照。鉴权时仍以账户表里的当前角色为准（见 resolveIdentity），
+  // 因此管理员降级某人后，对方手里的旧 token 会立即失效。
+  const r = role === 'user' ? 'user' : 'admin';
+  const payload = b64url(JSON.stringify({ u: user, r, exp }));
+  return { token: payload + '.' + signPayload(payload), exp, user, role: r };
 }
 function verifyToken(token) {
   if (typeof token !== 'string' || !token.includes('.')) return null;
@@ -107,7 +110,8 @@ function tokenFromReq(req) {
   if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
   return req.headers['x-admin-token'] ? String(req.headers['x-admin-token']) : '';
 }
-// 是否已登录：支持 Bearer token；兼容旧的 X-Admin-Password 明文头
+// 旧名保留为「是否已登录」（不区分角色）：仅供不需要角色判断的场景使用。
+// ⚠️ 改数据/管账户/审申请一律用 isAdminReq，否则普通用户登录后即可改动导航。
 function isAuthed(req) {
   if (!CFG.ADMIN_REQUIRED) return true;
   if (verifyToken(tokenFromReq(req))) return true;
@@ -117,6 +121,156 @@ function isAuthed(req) {
 function authUser(req) {
   const s = verifyToken(tokenFromReq(req));
   return s ? s.u : null;
+}
+
+/* ---------- 账户体系（多用户 + 角色 + 申请审核） ----------
+ * 线上（Cloudflare Pages）对应实现见 functions/_accounts.js，
+ * 改这里时请同步改那边，保持行为一致。
+ */
+const ACCOUNTS_FILE = path.join(ROOT, 'data', 'accounts.json');
+const APPS_FILE = path.join(ROOT, 'data', 'applications.json');
+const PBKDF2_ITER = 100000;
+
+const ROLE_ADMIN = 'admin';
+const ROLE_USER = 'user';
+// 账户状态机：pending(待审核) -> active(正常) / rejected(审核拒绝)；active 可被 disabled(禁用)
+const ST_PENDING = 'pending';
+const ST_ACTIVE = 'active';
+const ST_DISABLED = 'disabled';
+const ST_REJECTED = 'rejected';
+const STATUS_TEXT = { pending: '待审核', active: '正常', disabled: '已禁用', rejected: '未通过' };
+const MAX_ACCOUNTS = 500;
+const MAX_PENDING_PER_USER = 5;
+
+function readJSONSafe(file, fallback) {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    const v = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return v == null ? fallback : v;
+  } catch (e) { return fallback; }
+}
+function writeJSONSafe(file, obj) {
+  fs.writeFileSync(file, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+}
+function loadAccounts() {
+  const l = readJSONSafe(ACCOUNTS_FILE, []);
+  return Array.isArray(l) ? l : [];
+}
+function saveAccounts(list) { writeJSONSafe(ACCOUNTS_FILE, list || []); }
+function loadApps() {
+  const l = readJSONSafe(APPS_FILE, []);
+  return Array.isArray(l) ? l : [];
+}
+function saveApps(list) { writeJSONSafe(APPS_FILE, list || []); }
+
+/* 密码派生：PBKDF2-SHA256，100k 次迭代；库里只存 salt + 派生值，绝不存明文 */
+function randomHex(n) { return crypto.randomBytes(n).toString('hex'); }
+function pbkdf2(password, saltHex, iter) {
+  return new Promise((resolve, reject) => {
+    crypto.pbkdf2(String(password), Buffer.from(saltHex, 'hex'), iter || PBKDF2_ITER, 32, 'sha256',
+      (err, dk) => (err ? reject(err) : resolve(dk.toString('hex'))));
+  });
+}
+async function hashPassword(password) {
+  const salt = randomHex(16);
+  const iter = PBKDF2_ITER;
+  return { salt, iter, passHash: await pbkdf2(password, salt, iter) };
+}
+async function verifyPassword(password, acc) {
+  if (!acc || !acc.salt || !acc.passHash) return false;
+  const h = await pbkdf2(password, acc.salt, acc.iter || PBKDF2_ITER);
+  return safeEqualStr(h, acc.passHash);
+}
+// 定长比较，避免时序侧信道
+function safeEqualStr(a, b) {
+  const x = String(a || ''), y = String(b || '');
+  if (x.length !== y.length) return false;
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return d === 0;
+}
+function newId(prefix) { return prefix + '_' + Date.now().toString(36) + randomHex(4); }
+
+function publicAccount(a) {
+  if (!a) return null;
+  return {
+    id: a.id, username: a.username, nickname: a.nickname || '',
+    role: a.role === ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER,
+    status: a.status, statusText: STATUS_TEXT[a.status] || a.status,
+    createdAt: a.createdAt || 0, reviewedAt: a.reviewedAt || 0,
+    lastLoginAt: a.lastLoginAt || 0, note: a.note || ''
+  };
+}
+function publicApp(a) {
+  return {
+    id: a.id, kind: a.kind || 'link', kindText: '添加网站',
+    username: a.username, nickname: a.nickname || '',
+    name: a.name || '', url: a.url || '', desc: a.desc || '',
+    category: a.category || '', icon: a.icon || '',
+    status: a.status, statusText: STATUS_TEXT[a.status] || a.status,
+    createdAt: a.createdAt || 0, reviewedAt: a.reviewedAt || 0,
+    reviewer: a.reviewer || '', note: a.note || ''
+  };
+}
+
+/* 身份解析：角色以「库里账户当前状态」为准，而非只看 token 里签的 r，
+ * 这样禁用/降级后对方手里的旧 token 立即失效。
+ * 向后兼容：老 token 无 r 字段，但历史上只有超级管理员能登录，故视为 admin。 */
+function resolveIdentity(req) {
+  const s = verifyToken(tokenFromReq(req));
+  if (!s) return null;
+  const role = s.r === ROLE_USER ? ROLE_USER : ROLE_ADMIN;
+  if (role === ROLE_ADMIN && s.u === CFG.ADMIN_USER) {
+    return { user: s.u, role: ROLE_ADMIN, super: true, status: ST_ACTIVE };
+  }
+  const acc = loadAccounts().find((a) => a.username === s.u);
+  if (!acc) return null;
+  if (acc.status !== ST_ACTIVE) return null;
+  return {
+    user: acc.username,
+    role: acc.role === ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER,
+    super: false, status: acc.status, account: acc
+  };
+}
+/* 是否管理员：所有改数据/管账户/审申请的接口都必须用它，不能用 isAuthed */
+function isAdminReq(req) {
+  if (!CFG.ADMIN_REQUIRED) return true;
+  const pwd = req.headers['x-admin-password'];
+  if (pwd && CFG.ADMIN_PASSWORD && pwd === CFG.ADMIN_PASSWORD) return true;
+  const s = verifyToken(tokenFromReq(req));
+  if (!s) return false;
+  const role = s.r === ROLE_USER ? ROLE_USER : ROLE_ADMIN;
+  if (role !== ROLE_ADMIN) return false;
+  if (s.u === CFG.ADMIN_USER) return true;
+  const acc = loadAccounts().find((a) => a.username === s.u);
+  return !!(acc && acc.status === ST_ACTIVE && acc.role === ROLE_ADMIN);
+}
+
+function validateUsername(u) {
+  const s = String(u || '').trim();
+  if (s.length < 3) return '账号至少 3 个字符';
+  if (s.length > 20) return '账号最多 20 个字符';
+  if (!/^[A-Za-z0-9_.@-]+$/.test(s)) return '账号只能包含字母、数字、下划线、点、@ 和短横线';
+  return '';
+}
+function validatePassword(p) {
+  const s = String(p || '');
+  if (s.length < 6) return '密码至少 6 位';
+  if (s.length > 64) return '密码最多 64 位';
+  return '';
+}
+function normalizeUrl(u) {
+  let s = String(u || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  try { new URL(s); } catch (e) { return ''; }
+  return s;
+}
+function safeHost(u) {
+  try { return new URL(u).hostname; } catch (e) { return 'example.com'; }
+}
+function countAdmins(list) {
+  return list.filter((a) => a.role === ROLE_ADMIN && a.status === ST_ACTIVE).length;
 }
 
 /* 登录暴力破解防护：同一来源连续失败 8 次后冷却 5 分钟（进程内存，重启即清） */
@@ -450,7 +604,7 @@ const server = http.createServer(async (req, res) => {
     // 写接口鉴权：开启登录保护后，写操作需带 Bearer 会话 token
     const PROTECTED = ['/api/sites', '/api/save', '/api/recognize', '/api/config', '/api/upload'];
     if (['POST', 'PUT', 'DELETE'].includes(req.method) && PROTECTED.includes(pathname)) {
-      if (!isAuthed(req)) {
+      if (!isAdminReq(req)) {
         return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
       }
     }
@@ -532,7 +686,7 @@ const server = http.createServer(async (req, res) => {
 
     /* 在线壁纸库：服务端代理抓取，规避浏览器 CORS（需登录） */
     if (pathname === '/api/wallpapers' && req.method === 'GET') {
-      if (!isAuthed(req)) return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
+      if (!isAdminReq(req)) return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
       const source = String(parsed.query.source || 'bing');
       const page = Math.max(1, parseInt(parsed.query.page, 10) || 1);
       const q = String(parsed.query.q || '');
@@ -561,7 +715,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/config' && req.method === 'GET') {
-      if (!isAuthed(req)) return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
+      if (!isAdminReq(req)) return sendJSON(res, 401, { error: '请先登录后台', needAuth: true });
       return sendJSON(res, 200, {
         aiEnabled: CFG.AI_ENABLED,
         model: CFG.AI_ENABLED ? CFG.AI_MODEL : null,
@@ -602,13 +756,15 @@ const server = http.createServer(async (req, res) => {
     /* ---------- 登录 / 鉴权 ---------- */
     // GET /api/auth -> 登录状态（公开，不含敏感信息）
     if (pathname === '/api/auth' && req.method === 'GET') {
-      const s = verifyToken(tokenFromReq(req));
+      const id = resolveIdentity(req);
       return sendJSON(res, 200, {
         required: !!CFG.ADMIN_REQUIRED,
         configured: !!CFG.ADMIN_PASSWORD,
         user: CFG.ADMIN_USER || 'admin',
-        loggedIn: !!s,
-        loginUser: s ? s.u : null
+        loggedIn: !!id,
+        loginUser: id ? id.user : null,
+        role: id ? id.role : null,
+        isAdmin: !!(id && id.role === ROLE_ADMIN)
       });
     }
 
@@ -622,11 +778,13 @@ const server = http.createServer(async (req, res) => {
       if (pwd.length < 6) return sendJSON(res, 400, { error: '密码至少 6 位' });
       CFG.ADMIN_USER = user; CFG.ADMIN_PASSWORD = pwd; CFG.ADMIN_REQUIRED = true;
       persistConfig(CFG);
-      const t = issueToken(user, TOKEN_TTL, true);
+      const t = issueToken(user, TOKEN_TTL, true, ROLE_ADMIN);
       return sendJSON(res, 200, { ok: true, ...t, required: true });
     }
 
     // POST /api/auth/login -> 账号密码登录，返回会话 token
+    // 两类身份：① 超级管理员（config 里的 ADMIN_USER/ADMIN_PASSWORD）
+    //          ② 注册账户（data/accounts.json，须 status=active 才能登录）
     if (pathname === '/api/auth/login' && req.method === 'POST') {
       const ip = clientIp(req);
       const wait = throttleCheck(ip);
@@ -637,15 +795,53 @@ const server = http.createServer(async (req, res) => {
       const user = String((body && body.user) || '').trim();
       const pwd = String((body && body.password) || '');
       if (!CFG.ADMIN_PASSWORD) return sendJSON(res, 409, { error: '尚未初始化管理员账号', needSetup: true });
-      if (user !== CFG.ADMIN_USER || pwd !== CFG.ADMIN_PASSWORD) {
+
+      const remember = !!body.remember;
+      const ttl = remember ? TOKEN_TTL : SESSION_TTL_SHORT;
+      const fail = () => {
         const left = 8 - throttleFail(ip);
         return sendJSON(res, 401, {
           error: '账号或密码不正确' + (left > 0 && left <= 5 ? `（还可尝试 ${left} 次）` : '')
         });
+      };
+
+      // ① 超级管理员优先（避免被同名注册账户遮蔽）
+      const isSuper = !!CFG.ADMIN_USER
+        && user.toLowerCase() === String(CFG.ADMIN_USER).toLowerCase()
+        && safeEqualStr(pwd, CFG.ADMIN_PASSWORD);
+      if (isSuper) {
+        throttleReset(ip);
+        const t = issueToken(CFG.ADMIN_USER, ttl, remember, ROLE_ADMIN);
+        return sendJSON(res, 200, { ok: true, ...t, status: ST_ACTIVE });
       }
+
+      // ② 注册账户
+      const list = loadAccounts();
+      const acc = list.find((a) => String(a.username).toLowerCase() === user.toLowerCase());
+      if (!acc) return fail();
+      if (!(await verifyPassword(pwd, acc))) return fail();
+
+      // 密码正确后再回状态，避免暴露账号是否存在
+      if (acc.status === ST_PENDING) {
+        return sendJSON(res, 403, { error: '账号正在等待管理员审核，通过后即可登录', pending: true });
+      }
+      if (acc.status === ST_REJECTED) {
+        return sendJSON(res, 403, { error: '注册申请未通过' + (acc.note ? '：' + acc.note : ''), rejected: true });
+      }
+      if (acc.status !== ST_ACTIVE) {
+        return sendJSON(res, 403, { error: '账号已被禁用，请联系管理员', disabled: true });
+      }
+
       throttleReset(ip);
-      const t = issueToken(user, body.remember ? TOKEN_TTL : SESSION_TTL_SHORT, !!body.remember);
-      return sendJSON(res, 200, { ok: true, ...t });
+      acc.lastLoginAt = Date.now();
+      saveAccounts(list);
+      const role = acc.role === ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER;
+      const t = issueToken(acc.username, ttl, remember, role);
+      return sendJSON(res, 200, {
+        ok: true, ...t,
+        nickname: acc.nickname || acc.username,
+        status: acc.status
+      });
     }
 
     // POST /api/auth/logout -> 登出（服务端无状态，前端清除 token 即可）
@@ -658,6 +854,273 @@ const server = http.createServer(async (req, res) => {
       const s = verifyToken(tokenFromReq(req));
       if (!s) return sendJSON(res, 401, { error: '登录已失效，请重新登录', needAuth: true });
       return sendJSON(res, 200, { ok: true, user: s.u, exp: s.exp });
+    }
+
+    /* ---------- 注册 / 当前身份 ---------- */
+    // POST /api/auth/register -> 访问者自助注册（注册后待管理员审核）
+    if (pathname === '/api/auth/register' && req.method === 'POST') {
+      if (!CFG.ADMIN_REQUIRED) return sendJSON(res, 409, { error: '本站未开启登录保护，无需注册' });
+      const body = await readBody(req);
+      const username = String((body && body.username) || '').trim();
+      const password = String((body && body.password) || '');
+      const nickname = String((body && body.nickname) || '').trim().slice(0, 20);
+      const reason = String((body && body.reason) || '').trim().slice(0, 100);
+
+      const uErr = validateUsername(username);
+      if (uErr) return sendJSON(res, 400, { error: uErr });
+      const pErr = validatePassword(password);
+      if (pErr) return sendJSON(res, 400, { error: pErr });
+      if (CFG.ADMIN_USER && username.toLowerCase() === String(CFG.ADMIN_USER).toLowerCase()) {
+        return sendJSON(res, 400, { error: '该账号名不可用，请换一个' });
+      }
+
+      const list = loadAccounts();
+      if (list.length >= MAX_ACCOUNTS) return sendJSON(res, 429, { error: '注册人数已达上限，请联系管理员' });
+      if (list.some((a) => String(a.username).toLowerCase() === username.toLowerCase())) {
+        return sendJSON(res, 409, { error: '该账号已被注册' });
+      }
+
+      const h = await hashPassword(password);
+      const acc = {
+        id: newId('u'), username, nickname: nickname || username,
+        salt: h.salt, iter: h.iter, passHash: h.passHash,
+        role: ROLE_USER, status: ST_PENDING, reason,
+        createdAt: Date.now(), reviewedAt: 0, reviewedBy: '', note: ''
+      };
+      list.push(acc);
+      saveAccounts(list);
+      return sendJSON(res, 200, { ok: true, pending: true, message: '注册成功，请等待管理员审核通过后即可登录' });
+    }
+
+    // GET /api/auth/me -> 当前身份（用户名/角色/是否管理员）
+    if (pathname === '/api/auth/me' && req.method === 'GET') {
+      const id = resolveIdentity(req);
+      const base = {
+        required: !!CFG.ADMIN_REQUIRED, configured: !!CFG.ADMIN_PASSWORD,
+        loggedIn: false, user: null, role: null, isAdmin: false, nickname: '',
+        canRegister: !!CFG.ADMIN_REQUIRED
+      };
+      if (!id) return sendJSON(res, 200, base);
+      return sendJSON(res, 200, {
+        ...base, loggedIn: true, user: id.user, role: id.role,
+        isAdmin: id.role === ROLE_ADMIN,
+        nickname: (id.account && id.account.nickname) || id.user,
+        super: !!id.super
+      });
+    }
+
+    /* ---------- 账户管理（仅管理员） ---------- */
+    // GET /api/accounts -> 账户列表
+    if (pathname === '/api/accounts' && req.method === 'GET') {
+      if (!isAdminReq(req)) return sendJSON(res, 403, { error: '需要管理员权限', needAdmin: true });
+      const list = loadAccounts().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const accounts = list.map(publicAccount);
+      return sendJSON(res, 200, {
+        ok: true, accounts, total: accounts.length,
+        pending: accounts.filter((a) => a.status === ST_PENDING).length
+      });
+    }
+
+    // PATCH /api/accounts/:id -> 审核/禁用/提权/降级/重置密码/改昵称
+    const accMatch = pathname.match(/^\/api\/accounts\/([^/]+)$/);
+    if (accMatch && req.method === 'PATCH') {
+      if (!isAdminReq(req)) return sendJSON(res, 403, { error: '需要管理员权限', needAdmin: true });
+      const body = await readBody(req);
+      const action = String((body && body.action) || '').trim();
+      const ACTIONS = {
+        approve: '通过审核', reject: '驳回注册', disable: '禁用账户', enable: '恢复正常',
+        promote: '设为管理员', demote: '降为普通用户', resetPassword: '重置密码', rename: '修改昵称'
+      };
+      if (!Object.prototype.hasOwnProperty.call(ACTIONS, action)) {
+        return sendJSON(res, 400, { error: '不支持的操作：' + action });
+      }
+      const list = loadAccounts();
+      const acc = list.find((a) => String(a.id) === String(accMatch[1]));
+      if (!acc) return sendJSON(res, 404, { error: '账户不存在' });
+
+      const me = resolveIdentity(req);
+      const isSelf = me && me.user === acc.username;
+      const note = String((body && body.note) || '').trim().slice(0, 100);
+
+      // 防锁死：不能对自己降级/禁用；不能让可用管理员归零
+      if (isSelf && ['demote', 'disable'].includes(action)) {
+        return sendJSON(res, 400, { error: '不能对自己执行「' + ACTIONS[action] + '」，请让其他管理员操作' });
+      }
+      if (['demote', 'disable'].includes(action) && acc.role === ROLE_ADMIN && countAdmins(list) <= 1) {
+        return sendJSON(res, 400, { error: '这是最后一个可用的管理员，请先指定另一位管理员' });
+      }
+
+      if (action === 'approve') {
+        acc.status = ST_ACTIVE; acc.reviewedAt = Date.now();
+        acc.reviewedBy = me ? me.user : ''; acc.note = note;
+      } else if (action === 'reject') {
+        acc.status = ST_REJECTED; acc.reviewedAt = Date.now();
+        acc.reviewedBy = me ? me.user : ''; acc.note = note;
+      } else if (action === 'disable') {
+        acc.status = ST_DISABLED; acc.note = note;
+      } else if (action === 'enable') {
+        acc.status = ST_ACTIVE; acc.note = note;
+      } else if (action === 'promote') {
+        acc.role = ROLE_ADMIN;
+        if (acc.status === ST_PENDING) acc.status = ST_ACTIVE;
+      } else if (action === 'demote') {
+        acc.role = ROLE_USER;
+      } else if (action === 'rename') {
+        const nick = String((body && body.nickname) || '').trim().slice(0, 20);
+        if (!nick) return sendJSON(res, 400, { error: '昵称不能为空' });
+        acc.nickname = nick;
+      } else if (action === 'resetPassword') {
+        const pwd = String((body && body.password) || '');
+        const err = validatePassword(pwd);
+        if (err) return sendJSON(res, 400, { error: err });
+        const h = await hashPassword(pwd);
+        acc.salt = h.salt; acc.iter = h.iter; acc.passHash = h.passHash;
+      }
+      saveAccounts(list);
+      return sendJSON(res, 200, { ok: true, action, actionText: ACTIONS[action], account: publicAccount(acc) });
+    }
+
+    // DELETE /api/accounts/:id -> 删除账户
+    if (accMatch && req.method === 'DELETE') {
+      if (!isAdminReq(req)) return sendJSON(res, 403, { error: '需要管理员权限', needAdmin: true });
+      const list = loadAccounts();
+      const acc = list.find((a) => String(a.id) === String(accMatch[1]));
+      if (!acc) return sendJSON(res, 404, { error: '账户不存在' });
+      const me = resolveIdentity(req);
+      if (me && me.user === acc.username) return sendJSON(res, 400, { error: '不能删除自己的账户' });
+      if (acc.role === ROLE_ADMIN && acc.status === ST_ACTIVE && countAdmins(list) <= 1) {
+        return sendJSON(res, 400, { error: '这是最后一个可用的管理员，不能删除' });
+      }
+      saveAccounts(list.filter((a) => String(a.id) !== String(accMatch[1])));
+      return sendJSON(res, 200, { ok: true, deleted: acc.username });
+    }
+
+    /* ---------- 申请（普通用户提交，管理员审核） ---------- */
+    // GET /api/applications -> 管理员看全部；普通用户只看自己的
+    if (pathname === '/api/applications' && req.method === 'GET') {
+      const me = resolveIdentity(req);
+      if (!me) return sendJSON(res, 401, { error: '请先登录', needLogin: true });
+      const list = loadApps().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const isAdmin = me.role === ROLE_ADMIN;
+      const visible = isAdmin ? list : list.filter((a) => a.username === me.user);
+      return sendJSON(res, 200, {
+        ok: true, applications: visible.map(publicApp), total: visible.length,
+        pending: visible.filter((a) => a.status === ST_PENDING).length, isAdmin
+      });
+    }
+
+    // POST /api/applications -> 提交「添加网站」申请
+    if (pathname === '/api/applications' && req.method === 'POST') {
+      const me = resolveIdentity(req);
+      if (!me) return sendJSON(res, 401, { error: '请先登录后再提交申请', needLogin: true });
+      const body = await readBody(req);
+      const target = normalizeUrl(body && body.url);
+      if (!target) return sendJSON(res, 400, { error: '请填写合法的网址（如 https://example.com）' });
+
+      const list = loadApps();
+      const mine = list.filter((a) => a.username === me.user && a.status === ST_PENDING);
+      if (mine.length >= MAX_PENDING_PER_USER) {
+        return sendJSON(res, 429, { error: '你还有 ' + mine.length + ' 条申请在等待审核，请等管理员处理后再提交' });
+      }
+      if (mine.some((a) => a.url === target)) {
+        return sendJSON(res, 409, { error: '这个网址你已经提交过了，正在等待审核' });
+      }
+
+      let name = String((body && body.name) || '').trim().slice(0, 40);
+      let desc = String((body && body.desc) || '').trim().slice(0, 80);
+      let icon = String((body && body.icon) || '').trim().slice(0, 300);
+      if (!name || !desc) {
+        try {
+          const meta = await fetchMeta(target);
+          if (!name) name = (meta.title || '').slice(0, 40);
+          if (!desc) desc = (meta.desc || '').slice(0, 80);
+          if (!icon) icon = meta.icon || '';
+        } catch (e) { /* 抓不到就让管理员审核时补 */ }
+      }
+      if (!name) name = safeHost(target);
+
+      const data = loadData();
+      const catNames = (data.categories || []).map((c) => c.name);
+      let category = String((body && body.category) || '').trim();
+      if (category && !catNames.includes(category)) category = '';
+
+      const app = {
+        id: newId('a'), kind: 'link',
+        username: me.user, nickname: (me.account && me.account.nickname) || me.user,
+        name, url: target, desc, icon, category,
+        status: ST_PENDING, createdAt: Date.now(), reviewedAt: 0, reviewer: '', note: ''
+      };
+      list.push(app);
+      saveApps(list);
+      return sendJSON(res, 200, { ok: true, pending: true, application: publicApp(app), message: '已提交，等待管理员审核' });
+    }
+
+    // PATCH /api/applications/:id -> 管理员审核（通过则自动收录）；用户可撤回自己的待审申请
+    const appMatch = pathname.match(/^\/api\/applications\/([^/]+)$/);
+    if (appMatch && req.method === 'PATCH') {
+      const me = resolveIdentity(req);
+      if (!me) return sendJSON(res, 401, { error: '请先登录', needLogin: true });
+      const body = await readBody(req);
+      const action = String((body && body.action) || '').trim();
+      const note = String((body && body.note) || '').trim().slice(0, 100);
+      const list = loadApps();
+      const app = list.find((a) => String(a.id) === String(appMatch[1]));
+      if (!app) return sendJSON(res, 404, { error: '申请不存在' });
+
+      const isAdmin = me.role === ROLE_ADMIN;
+      if (!isAdmin) {
+        if (action !== 'withdraw') return sendJSON(res, 403, { error: '只有管理员可以审核申请', needAdmin: true });
+        if (app.username !== me.user) return sendJSON(res, 403, { error: '只能撤回自己的申请' });
+        if (app.status !== ST_PENDING) return sendJSON(res, 400, { error: '该申请已被处理，无法撤回' });
+        saveApps(list.filter((a) => String(a.id) !== String(app.id)));
+        return sendJSON(res, 200, { ok: true, action: 'withdraw', message: '已撤回申请' });
+      }
+
+      if (!['approve', 'reject'].includes(action)) return sendJSON(res, 400, { error: '不支持的操作：' + action });
+      if (app.status !== ST_PENDING) {
+        return sendJSON(res, 400, { error: '该申请已处理过（当前：' + (STATUS_TEXT[app.status] || app.status) + '）' });
+      }
+
+      if (action === 'reject') {
+        app.status = ST_REJECTED; app.reviewedAt = Date.now();
+        app.reviewer = me.user; app.note = note;
+        saveApps(list);
+        return sendJSON(res, 200, { ok: true, action, application: publicApp(app) });
+      }
+
+      // 通过：先把链接写进导航数据，成功后才改申请状态（避免标记通过却没收录）
+      const data = loadData();
+      const cats = data.categories || [];
+      let targetName = String((body && body.category) || '').trim();
+      if (!targetName || !cats.some((c) => c.name === targetName)) {
+        targetName = app.category || (cats[0] && cats[0].name) || '';
+      }
+      if (!targetName) return sendJSON(res, 400, { error: '导航里还没有任何分类，请先在后台新建分类' });
+
+      const r = upsertCard({
+        name: app.name, url: app.url, desc: app.desc || '',
+        icon: app.icon || ('https://icons.duckduckgo.com/ip3/' + safeHost(app.url) + '.ico'),
+        category: targetName
+      });
+
+      app.status = ST_ACTIVE; app.reviewedAt = Date.now();
+      app.reviewer = me.user; app.category = r.category; app.note = note;
+      saveApps(list);
+      return sendJSON(res, 200, {
+        ok: true, action, savedTo: r.category,
+        message: '已通过并收录到分类「' + r.category + '」',
+        application: publicApp(app)
+      });
+    }
+
+    // DELETE /api/applications/:id -> 管理员删除申请记录
+    if (appMatch && req.method === 'DELETE') {
+      if (!isAdminReq(req)) return sendJSON(res, 403, { error: '需要管理员权限', needAdmin: true });
+      const list = loadApps();
+      const app = list.find((a) => String(a.id) === String(appMatch[1]));
+      if (!app) return sendJSON(res, 404, { error: '申请不存在' });
+      saveApps(list.filter((a) => String(a.id) !== String(appMatch[1])));
+      return sendJSON(res, 200, { ok: true, deleted: app.id });
     }
 
     if (req.method === 'GET') return serveStatic(req, res, pathname);
