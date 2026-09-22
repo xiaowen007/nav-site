@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230111" />
+  <link rel="stylesheet" href="css/style.css?v=202609230133" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -395,6 +395,40 @@
     .studio-side .seg-btn { padding: 5px 10px; }
     .sr-ctl { display: flex; align-items: center; gap: 8px; }
     .sr-ctl .hint { flex: none; min-width: 42px; text-align: right; }
+
+    /* —— 站点图标选择器（首页设置 → 站点信息 → 站点图标）——
+       12 个内置光伏类图标 + 一个「默认 🌐」格子，外加一个自定义输入框。
+       格子里的 SVG 由 js/logos.js 注入，尺寸统一 24px。 */
+    .logo-head { display: flex; align-items: center; gap: 10px; margin: 2px 0 8px; }
+    .logo-preview {
+      width: 46px; height: 46px; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; line-height: 1;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    }
+    .logo-preview svg { width: 30px; height: 30px; display: block; }
+    .logo-preview img { height: 30px; min-width: 30px; width: auto; max-width: 40px; object-fit: contain; display: block; }
+    .logo-preview .logo-text { font-size: 26px; }
+    .logo-head .lh-txt { min-width: 0; }
+    .logo-head .lh-txt b { display: block; font-size: 12.5px; }
+    .logo-head .lh-txt span { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+    .logo-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+    }
+    .logo-pick {
+      aspect-ratio: 1 / 1;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 9px;
+      cursor: pointer; padding: 0; transition: border-color .15s, box-shadow .15s, transform .12s;
+    }
+    .logo-pick:hover { border-color: var(--primary); transform: translateY(-1px); }
+    .logo-pick.on {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 30%, transparent);
+    }
+    .logo-pick svg { width: 22px; height: 22px; display: block; }
+    .logo-pick .lp-emoji { font-size: 19px; line-height: 1; }
+    @media (max-width: 1180px) { .logo-grid { grid-template-columns: repeat(6, 1fr); } }
     /* —— 卡片大小滑块：刻度条要正好落在滑轨下方 ——
        刻度只在「滑轨 + 拇指内缩」的宽度内排布，所以它必须和 range 同宽：
        把 range 与刻度一起放进 .csize-wrap（flex:1），右侧的档位文字留在 wrap 外面。
@@ -711,6 +745,28 @@
           <section class="side-view on" data-view="home">
             <div class="settings-section">
               <h4>站点信息</h4>
+              <!-- 站点图标 = 顶栏左上角、站点名称左边那个图标（#siteLogo）。
+                   预置格子由 js/logos.js 生成；#setLogo 是真正的数据源
+                   （collectSettings 只读它），点格子 = 往它写值，两者始终一致。 -->
+              <label class="hint">站点图标（顶栏左上角）</label>
+              <div class="logo-head">
+                <span class="logo-preview" id="logoPreview">🌐</span>
+                <div class="lh-txt">
+                  <b>当前：<span id="logoCurName">默认</span></b>
+                  <span id="logoCurVal">🌐</span>
+                </div>
+              </div>
+              <div class="logo-grid" id="logoGrid"><!-- 格子由 JS 注入 --></div>
+              <div class="settings-row" style="padding-top:8px">
+                <span class="srl">自定义图标</span>
+                <input type="text" id="setLogo" name="site-logo" autocomplete="off"
+                       placeholder="填 emoji（如 🌐）或图片地址，留空恢复默认" />
+              </div>
+              <p class="settings-hint" style="margin-top:2px">
+                预置 12 款内置矢量图标（光伏板 / 光储一体 / 光伏并网 / 户用光伏 …），不依赖外部图片、
+                调多大都不糊，且会跟随「顶栏名称字号」一起缩放。也可以填 emoji 或自己的图片地址。
+              </p>
+
               <!-- 顶栏（首页左上角）与中心（正文顶部大标题）是**两套独立内容**：
                    文字分开填、字号分开调，谁都不影响谁。 -->
               <label class="hint">站点名称（顶栏左上角）</label>
@@ -1045,6 +1101,7 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/admin.js?v=202609230111"></script>
+  <script src="js/logos.js?v=202609230133"></script>
+  <script src="js/admin.js?v=202609230133"></script>
 </body>
 </html>

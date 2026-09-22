@@ -221,7 +221,16 @@
 
   function renderHead() {
     const s = state.data.site || {};
-    if (s.logo) $('#siteLogo').textContent = s.logo;
+    // 站点图标交给 js/logos.js 统一渲染：内置光伏图标 → 内联 SVG，
+    // emoji / 短文字 → 文本，图片地址 → <img>（三种值都兼容，详见 logos.js 顶部说明）。
+    // 空值交给 markup() 回落到默认图标 —— 后台把图标清空 = 恢复默认，而不是留个空位。
+    // logos.js 万一没加载（理论上不会，index.html / admin.html 都已引入）就退回纯文本，
+    // 行为与旧版一致，不至于把图标整个丢掉。
+    const logoEl = $('#siteLogo');
+    if (logoEl) {
+      if (window.NAV_LOGOS) logoEl.innerHTML = window.NAV_LOGOS.markup(s.logo);
+      else if (s.logo) logoEl.textContent = s.logo;
+    }
     if (s.title) {
       $('#siteTitle').textContent = s.title;
       document.title = s.title;

@@ -106,8 +106,27 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
 }
 /* 图标跟着「站点名称字号」一起缩放：否则把名称拖到 40px 时，固定 22px 的
-   emoji 会显得极小、比例失衡。默认 18px × 1.2 ≈ 21.6px，与改版前基本一致。 */
-.brand #siteLogo { font-size: calc(var(--title-size) * 1.2); line-height: 1; }
+   emoji 会显得极小、比例失衡。默认 18px × 1.2 ≈ 21.6px，与改版前基本一致。
+   站内图标（光伏类矢量图）由后台「站点图标」选择器更换，见 js/logos.js；
+   这里统一按 1em 排版 —— 换什么图标都不用改尺寸，字号滑块一拖图标同步变大。 */
+.brand #siteLogo {
+  font-size: calc(var(--title-size) * 1.2);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;              /* 名称过长时别把图标挤扁（省略号由 .brand-text 负责） */
+}
+.brand #siteLogo svg { width: 1em; height: 1em; display: block; }
+/* 自定义图片可能不是正方形：锁高度、宽度按比例自适应，避免被拉变形。
+   min-width 是兜底：图片地址失效时（naturalWidth=0）宽度会塌成 0，
+   图标凭空消失、后面的名称跟着左移一下；给个最小占位就不会有这种跳动。
+   配合 object-fit: contain，竖长图落在方形盒子里也不会被拉伸。 */
+.brand #siteLogo img {
+  height: 1em; min-width: 1em; width: auto; max-width: 1.6em;
+  object-fit: contain; display: block;
+}
+.brand #siteLogo .logo-text { display: block; }
 .brand-text {
   display: flex;
   flex-direction: column;

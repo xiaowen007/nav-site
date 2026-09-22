@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230111" />
+  <link rel="stylesheet" href="css/style.css?v=202609230133" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -15,6 +15,10 @@
          两行文字各自的字号由两个滑块控制（--title-size / --subtitle-size），
          所以这里不用写死 font-size。 -->
     <div class="brand">
+      <!-- 站点图标：#siteLogo 的内容由 app.js 的 renderHead() 用 js/logos.js 填充。
+           支持三种值（见 js/logos.js 顶部说明）：内置光伏图标 id（如 pv:panel，
+           渲染为内联 SVG）、emoji/短文字、图片地址。
+           图标大小跟着「顶栏名称字号」等比缩放（CSS 里用 1em），所以这里不写死尺寸。 -->
       <span id="siteLogo">🌐</span>
       <span class="brand-text">
         <span id="siteTitle">共享导航</span>
@@ -173,7 +177,8 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202609230111"></script>
-  <script src="js/app.js?v=202609230111"></script>
+  <script src="js/lunar.js?v=202609230133"></script>
+  <script src="js/logos.js?v=202609230133"></script>
+  <script src="js/app.js?v=202609230133"></script>
 </body>
 </html>

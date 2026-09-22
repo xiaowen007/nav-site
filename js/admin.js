@@ -1207,9 +1207,53 @@
     });
   }
 
+  /* ===== 站点图标选择器（首页设置 → 站点信息 → 站点图标） =====
+   * #setLogo 是**唯一数据源**：collectSettings() 只读它，点格子 = 往它写值。
+   * 之所以不让格子自己存一份状态：侧栏的 click/input 委托统一走 collectSettings，
+   * 只要值落在输入框里，「即时预览 + 脏标记 + 保存」三条链路就全都自然联动，
+   * 不必为图标单开一条旁路（那样最容易出现「预览变了但保存没带上」）。
+   * 预置图标来自 js/logos.js，第一个格子是「默认 🌐」。 */
+  function renderLogoPicker() {
+    const grid = $('#logoGrid');
+    const L = window.NAV_LOGOS;
+    if (!grid || !L) return; // logos.js 未加载时保持空网格，输入框仍可手填
+    const items = [{ id: L.DEFAULT, name: '默认图标' }].concat(L.list);
+    grid.innerHTML = items.map((it) =>
+      '<button type="button" class="logo-pick" data-logo="' + esc(it.id) + '" title="' + esc(it.name) + '">' +
+        (it.svg || '<span class="lp-emoji">' + esc(it.id) + '</span>') +
+      '</button>'
+    ).join('');
+  }
+
+  /* 把 #setLogo 的值同步到「预览方块 + 格子高亮 + 当前值文案」三处。
+     三处读的都是同一个值，所以只需在值变化后调一次。 */
+  function syncLogoUI() {
+    const L = window.NAV_LOGOS;
+    const input = $('#setLogo');
+    if (!input) return;
+    const val = input.value.trim() || (L ? L.DEFAULT : '');
+    const pv = $('#logoPreview');
+    if (pv && L) pv.innerHTML = L.markup(val);
+    const hit = L && L.get(val);
+    const nameEl = $('#logoCurName');
+    if (nameEl) {
+      nameEl.textContent = hit ? hit.name
+        : (L && L.isImage(val) ? '自定义图片' : (val === (L && L.DEFAULT) ? '默认' : '自定义'));
+    }
+    const valEl = $('#logoCurVal');
+    if (valEl) valEl.textContent = val;
+    document.querySelectorAll('.logo-pick').forEach((b) => {
+      b.classList.toggle('on', b.dataset.logo === val);
+    });
+  }
+
   function populateSettings() {
     const s = state.data.site || {};
     $('#setTitle').value = s.title || '';
+    // 站点图标：空值 = 用默认图标（前台 renderHead 也是这个约定），
+    // 所以回填时把空串原样放进输入框，不要替用户写死一个 '🌐'。
+    $('#setLogo').value = s.logo || '';
+    syncLogoUI();
     $('#setSubtitle').value = s.subtitle || '';
     $('#setFooter').value = s.footer || '';
     // 主页中心模块（正文顶部大标题）：与顶栏那份独立。空值 = 沿用站点名称 / 站点描述，
@@ -1473,6 +1517,9 @@
   function collectSettings() {
     const s = state.data.site = state.data.site || {};
     s.title = $('#setTitle').value.trim();
+    // 站点图标：空 = 恢复默认（前台 markup('') 同样回落默认图标，两边约定一致）。
+    // 内置图标存 id（如 'pv:panel'），也允许 emoji / 图片地址，见 js/logos.js。
+    s.logo = $('#setLogo').value.trim() || (window.NAV_LOGOS ? window.NAV_LOGOS.DEFAULT : '🌐');
     s.subtitle = $('#setSubtitle').value.trim();
     s.footer = $('#setFooter').value.trim();
     // 主页中心模块的文字：留空就删掉字段（前台 renderHead 会自动回落到 title / subtitle），
@@ -1565,6 +1612,22 @@
     $('#setSubtitleSize').addEventListener('input', (e) => { $('#setSubtitleSizeVal').textContent = e.target.value + 'px'; });
     $('#setHeroTitleSize').addEventListener('input', (e) => { $('#setHeroTitleSizeVal').textContent = e.target.value + 'px'; });
     $('#setHeroSubSize').addEventListener('input', (e) => { $('#setHeroSubSizeVal').textContent = e.target.value + 'px'; });
+
+    // 站点图标：点预置格子 = 往 #setLogo 写值（写完后同步预览与高亮）。
+    // 这里只负责「把值放进输入框」，随后的即时预览 / 脏标记由侧栏统一的
+    // click 委托（bindStudio 里那一段）接管 —— 不要在这里重复调 pushPreview。
+    const logoGrid = $('#logoGrid');
+    if (logoGrid) {
+      logoGrid.addEventListener('click', (e) => {
+        const btn = e.target.closest('.logo-pick');
+        if (!btn) return;
+        $('#setLogo').value = btn.dataset.logo || '';
+        syncLogoUI();
+      });
+    }
+    // 手填 emoji / 图片地址：输入即刷新预览方块与格子高亮
+    // （取空时显示回默认图标的预览，与「留空即恢复默认」的约定一致）
+    $('#setLogo').addEventListener('input', syncLogoUI);
 
     $('#addEngine').addEventListener('click', addEngine);
     $('#resetEngines').addEventListener('click', resetEngines);
@@ -1842,6 +1905,9 @@
   async function main() {
     // 角色门禁放在最前：普通用户直接返回，既不加载导航数据也不请求账户/申请接口
     if (!(await applyRoleGate())) return;
+    // 站点图标格子先铺好：它只依赖 js/logos.js，不依赖导航数据，
+    // 且必须在 populateSettings()（里面会调 syncLogoUI 打高亮）之前完成。
+    renderLogoPicker();
     await loadData();
     populateSettings();
     await loadConfig();
