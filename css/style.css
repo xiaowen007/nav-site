@@ -135,6 +135,24 @@ a { color: inherit; text-decoration: none; }
   transition: border-color .15s, background .15s;
 }
 .search-box input:focus { border-color: var(--primary); background: var(--glass-hover); }
+
+/* 搜索框刻意用 type="search" 来躲开浏览器密码管理器的自动填充（见 index.html 注释）。
+   代价是浏览器会塞进一个原生清除按钮 / 圆角装饰，和自绘的 ✕ 重叠，这里抹掉。 */
+.search-box input[type="search"],
+.ws-input-wrap input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-box input[type="search"]::-webkit-search-cancel-button,
+.search-box input[type="search"]::-webkit-search-decoration,
+.search-box input[type="search"]::-webkit-search-results-button,
+.ws-input-wrap input[type="search"]::-webkit-search-cancel-button,
+.ws-input-wrap input[type="search"]::-webkit-search-decoration,
+.ws-input-wrap input[type="search"]::-webkit-search-results-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
 .search-clear {
   position: absolute;
   right: 12px;

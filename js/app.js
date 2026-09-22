@@ -791,6 +791,52 @@
     onSearch('');
   }
 
+  /* ===== 自动填充守卫 =====
+     Chrome / Edge 的密码管理器会无视 autocomplete="off"，把保存的账号名
+     （如 "admin"）直接写进页面顶部的文本框。更麻烦的是它**会触发 input 事件**，
+     于是页面一打开就真的执行了一次"搜索 admin"，正文只剩一条匹配结果 ——
+     看起来像是程序自己乱搜，其实是浏览器填充的（2026-09 线上实际反馈）。
+
+     治本手段在 index.html：搜索框改用 type="search"，不会被当作凭据字段。
+     这里再加一层兜底，防止别的浏览器 / 别的路径仍然填进来。
+
+     判据：autofill 只设值、**不会触发 focus / keydown / pointerdown 等真实交互**，
+     所以「有值 + 全程无交互痕迹」即可判定为浏览器填充。只在初始化后的短窗口内
+     检查（浏览器填充都发生在这个阶段），窗口期一过立即收手，绝不干预用户输入。
+     若代码里没有这个守卫，用户手动输入的值也不会被误清——因为那时一定有交互痕迹。 */
+  function guardAutofill() {
+    const boxes = [$('#searchInput'), $('#wsInput')].filter(Boolean);
+    if (!boxes.length) return;
+
+    const touched = new WeakSet();
+    boxes.forEach((el) => {
+      ['focus', 'keydown', 'pointerdown', 'touchstart'].forEach((ev) =>
+        el.addEventListener(ev, () => touched.add(el), { once: true, passive: true }));
+    });
+
+    const deadline = Date.now() + 2500;
+    (function check() {
+      let cleaned = false;
+      boxes.forEach((el) => {
+        if (el.value && !touched.has(el)) { el.value = ''; cleaned = true; }
+      });
+      // 清掉被填充的搜索词后，视图必须退回「全部分类」，
+      // 否则正文仍停在那个"自动搜索"的结果上，跟没清一样。
+      if (cleaned) {
+        const sc = $('#searchClear');
+        if (sc) sc.classList.remove('show');
+        const wc = $('#wsClear');
+        if (wc) wc.classList.remove('show');
+        if (state.keyword) {
+          state.keyword = '';
+          if (state.view === 'fav') renderFavorites(); else renderSections();
+          setActive('all');
+        }
+      }
+      if (Date.now() < deadline) setTimeout(check, 150);
+    })();
+  }
+
   /* 移动端侧栏 */
   function openSidebar() { $('#sidebar').classList.add('open'); $('#sidebarMask').classList.add('show'); }
   function closeSidebar() { $('#sidebar').classList.remove('open'); $('#sidebarMask').classList.remove('show'); }
@@ -830,6 +876,9 @@
       document.documentElement.setAttribute('data-theme', cur);
       try { localStorage.setItem('theme', cur); } catch (e) {}
     });
+
+    // 拦住浏览器密码管理器往搜索框里灌账号名（详见 guardAutofill 注释）
+    guardAutofill();
   }
 
   /* ===== 账户体系：登录 / 注册 / 用户中心（提交「添加网站」申请） =====

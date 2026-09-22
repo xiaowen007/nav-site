@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609222150" />
+  <link rel="stylesheet" href="css/style.css?v=202609222321" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -18,7 +18,12 @@
         <form class="ws-form" id="wsForm" autocomplete="off" role="search">
           <div class="ws-input-wrap">
             <span class="ws-badge" id="wsBadge" title="切换搜索引擎" role="button">百</span>
-            <input type="text" id="wsInput" placeholder="搜索网页内容…" aria-label="搜索关键词" />
+            <!-- type="search" 是刻意的：Chrome / Edge 的密码管理器会把保存的账号名
+                 填进 type="text" 的顶部文本框（并触发 input 事件 → 页面一打开就
+                 "自动搜索"了账号名）。search 类型不会被当作凭据字段，从根上挡住。 -->
+            <input type="search" id="wsInput" name="nav-web-q" placeholder="搜索网页内容…"
+                   aria-label="搜索关键词" autocomplete="off" autocorrect="off"
+                   autocapitalize="off" spellcheck="false" />
             <button type="button" class="ws-clear" id="wsClear" title="清除" aria-label="清除关键词">✕</button>
           </div>
           <button type="submit" class="ws-go" id="wsGo" title="开始搜索">🔍<span class="ws-go-txt"> 搜索</span></button>
@@ -29,7 +34,10 @@
 
       <!-- 站内站点 / 分类搜索 -->
       <div class="search-box">
-        <input type="text" id="searchInput" placeholder="搜索站点 / 分类…" autocomplete="off" />
+        <!-- 同上：必须保持 type="search"，不要改回 text，否则浏览器会自动填入账号名 -->
+        <input type="search" id="searchInput" name="nav-site-q" placeholder="搜索站点 / 分类…"
+               aria-label="搜索站点或分类" autocomplete="off" autocorrect="off"
+               autocapitalize="off" spellcheck="false" />
         <span class="search-clear" id="searchClear" title="清除">✕</span>
       </div>
     </div>
@@ -82,27 +90,36 @@
       </div>
 
       <div class="mpane" id="paneLogin">
-        <label class="fl" for="loginUser">账号</label>
-        <input type="text" id="loginUser" placeholder="账号" autocomplete="username" />
-        <label class="fl" for="loginPwd">密码</label>
-        <input type="password" id="loginPwd" placeholder="密码" autocomplete="current-password" />
-        <label class="chk"><input type="checkbox" id="loginRemember" checked /> 记住登录（30 天）</label>
-        <button class="btn primary block" id="doLogin" type="button">登录</button>
-        <p class="modal-msg" id="loginMsg"></p>
+        <!-- 这层 form 元素是刻意加的：给浏览器的密码管理器一个明确的作用域边界。
+             没有它时，账号 / 密码字段的作用域会被放大到整个页面，浏览器可能把
+             保存的账号名填进顶部的搜索框（2026-09 线上实际反馈）。
+             按钮保持 type="button"，提交由 app.js 处理，表单永远不会真的提交。 -->
+        <form id="loginForm">
+          <label class="fl" for="loginUser">账号</label>
+          <input type="text" id="loginUser" name="username" placeholder="账号" autocomplete="username" />
+          <label class="fl" for="loginPwd">密码</label>
+          <input type="password" id="loginPwd" name="password" placeholder="密码" autocomplete="current-password" />
+          <label class="chk"><input type="checkbox" id="loginRemember" checked /> 记住登录（30 天）</label>
+          <button class="btn primary block" id="doLogin" type="button">登录</button>
+          <p class="modal-msg" id="loginMsg"></p>
+        </form>
       </div>
 
       <div class="mpane hidden" id="paneRegister">
-        <label class="fl" for="regUser">账号</label>
-        <input type="text" id="regUser" placeholder="3-20 位字母、数字、下划线" autocomplete="username" />
-        <label class="fl" for="regNick">昵称（可选）</label>
-        <input type="text" id="regNick" placeholder="显示用的名字" />
-        <label class="fl" for="regPwd">密码</label>
-        <input type="password" id="regPwd" placeholder="至少 6 位" autocomplete="new-password" />
-        <label class="fl" for="regReason">申请说明（可选）</label>
-        <input type="text" id="regReason" placeholder="简单说明来意，便于管理员审核" />
-        <button class="btn primary block" id="doRegister" type="button">提交注册</button>
-        <p class="hint">注册后需管理员审核通过才能登录。</p>
-        <p class="modal-msg" id="regMsg"></p>
+        <!-- 同上：用 form 元素圈定作用域，避免浏览器把账号名灌进别处的文本框 -->
+        <form id="regForm">
+          <label class="fl" for="regUser">账号</label>
+          <input type="text" id="regUser" name="new-username" placeholder="3-20 位字母、数字、下划线" autocomplete="username" />
+          <label class="fl" for="regNick">昵称（可选）</label>
+          <input type="text" id="regNick" name="nickname" placeholder="显示用的名字" autocomplete="off" />
+          <label class="fl" for="regPwd">密码</label>
+          <input type="password" id="regPwd" name="new-password-field" placeholder="至少 6 位" autocomplete="new-password" />
+          <label class="fl" for="regReason">申请说明（可选）</label>
+          <input type="text" id="regReason" name="apply-reason" placeholder="简单说明来意，便于管理员审核" autocomplete="off" />
+          <button class="btn primary block" id="doRegister" type="button">提交注册</button>
+          <p class="hint">注册后需管理员审核通过才能登录。</p>
+          <p class="modal-msg" id="regMsg"></p>
+        </form>
       </div>
     </div>
   </div>
@@ -119,9 +136,9 @@
 
       <h5 class="sub">申请添加网站</h5>
       <div class="apply-form">
-        <input type="text" id="appUrl" placeholder="网址（如 example.com）" />
-        <input type="text" id="appName" placeholder="名称（留空自动抓取）" />
-        <input type="text" id="appDesc" placeholder="简介（可选）" />
+        <input type="text" id="appUrl" name="apply-url" placeholder="网址（如 example.com）" autocomplete="off" />
+        <input type="text" id="appName" name="apply-name" placeholder="名称（留空自动抓取）" autocomplete="off" />
+        <input type="text" id="appDesc" name="apply-desc" placeholder="简介（可选）" autocomplete="off" />
         <select id="appCat" title="建议归类"><option value="">建议分类（可选）</option></select>
         <button class="btn primary" id="doApply" type="button">提交申请</button>
       </div>
@@ -142,7 +159,7 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202609222150"></script>
-  <script src="js/app.js?v=202609222150"></script>
+  <script src="js/lunar.js?v=202609222321"></script>
+  <script src="js/app.js?v=202609222321"></script>
 </body>
 </html>
