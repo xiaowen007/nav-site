@@ -748,6 +748,9 @@
     $('#savedDot').style.color = state.dirty ? '#e8543f' : '#1aa179';
     const sb = $('#saveAll');
     if (sb) sb.classList.toggle('dirty', state.dirty); // 有未保存改动时保存按钮呼吸提示
+    // 预览卡上的「有未保存的更改」角标，与顶栏保存按钮保持同一状态源
+    const pv = $('#pvDirty');
+    if (pv) pv.classList.toggle('on', !!state.dirty);
   }
 
   // KV 未绑定（部署后尚未手动绑定）时显示顶部警示横幅
@@ -792,6 +795,7 @@
     try {
       const r = await api('/api/sites', 'POST', state.data);
       state.dirty = false; updateSaved();
+      pushPreview(); // 存盘后把新数据热更新给右侧预览（无需重新加载 iframe）
       $('#consoleStatus').textContent = `已保存：${r.categories} 个分类 / ${r.links} 条链接。`;
       $('#consoleStatus').className = 'status ok';
     } catch (e) {
@@ -1424,7 +1428,10 @@
     return 'image';
   }
 
-  async function saveSettings() {
+  /* 把侧栏表单里的当前值收集进 state.data.site（只写内存，不落库）。
+   * 「保存设置」与「实时预览」共用这一份逻辑：预览要在未保存时就反映改动，
+   * 所以必须和保存走同样的取值路径，否则两边会看到不一样的结果。 */
+  function collectSettings() {
     const s = state.data.site = state.data.site || {};
     s.title = $('#setTitle').value.trim();
     s.subtitle = $('#setSubtitle').value.trim();
@@ -1449,15 +1456,23 @@
     // 字体
     s.fontSize = +$('#setFontSize').value || 14;
     s.fontFamily = $('#setFontFamily').value;
+    return s;
+  }
+
+  async function saveSettings() {
+    collectSettings();
     state.dirty = true; updateSaved();
     // 直接落库：原先只写进内存、还必须再点一次「💾 保存」才提交，这一步极易被忽略，
     // 正是「后台改了设置、主页毫无变化」的最常见人为原因。现在点一次即生效。
     const stEl = $('#settingsSaveStatus');
+    stEl.className = 'sf-status';
     stEl.textContent = '保存中…';
     try {
       await saveAll();
-      stEl.textContent = '✓ 已保存，刷新主页即可看到效果';
+      stEl.className = 'sf-status ok';
+      stEl.textContent = '✓ 已保存，主页立即生效';
     } catch (e) {
+      stEl.className = 'sf-status err';
       stEl.textContent = '✗ 保存失败：' + (e && e.message ? e.message : '未知错误');
     }
   }
@@ -1527,7 +1542,9 @@
         state.dirty = true; updateSaved();
         st.textContent = '✓ 已上传并设为壁纸';
         prev.src = url; prev.style.display = 'inline-block';
-        $('#settingsSaveStatus').textContent = '✓ 已写入内存，点「① 导航数据管理」的「💾 保存」即可生效';
+        const sv = $('#settingsSaveStatus');
+        if (sv) { sv.className = 'sf-status'; sv.textContent = '壁纸已选中，点「保存设置」生效'; }
+        pushPreview();
       } catch (err) { st.textContent = '上传失败：' + err.message; }
       e.target.value = '';
     });
@@ -1571,7 +1588,8 @@
         grid.querySelectorAll('.wp-item').forEach((x) => x.classList.remove('on'));
         d.classList.add('on');
         state.dirty = true; updateSaved();
-        $('#wpStatus').textContent = '✓ 已选为壁纸，点右上角「💾 保存更改」生效';
+        $('#wpStatus').textContent = '✓ 已选为壁纸，点「保存设置」生效';
+        pushPreview();
       });
       grid.appendChild(d);
     });
@@ -1628,7 +1646,130 @@
       const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', cur);
       try { localStorage.setItem('theme', cur); } catch (e) {}
+      // 预览 iframe 是独立文档，只在加载时读一次主题；这里顺带刷新它，
+      // 免得后台切了深色、左侧预览还停在浅色。
+      setTimeout(refreshPreview, 150);
     });
+  }
+
+  /* ================= 工作台：首页预览 + 右侧系统设置面板 =================
+   * 布局：左列「首页预览 + 数据管理面板」，右列是 sticky 的设置侧栏。
+   * 预览的实时性来自一条同源数据通道：后台把「内存中尚未保存」的 state.data
+   * 写进 localStorage.nav_preview_data 并 postMessage 给 iframe，前台
+   * （js/app.js 在 URL 带 preview=1 时）优先读这份数据并热更新重渲染。
+   * 因此改设置不必先保存就能在左侧看到效果。
+   */
+  const SIDE_TAB_KEY = 'nav_admin_side_tab';
+  const SIDE_OPEN_KEY = 'nav_admin_side_open';
+  const PREVIEW_KEY = 'nav_preview_data';
+
+  function switchSideTab(name) {
+    const tabs = document.querySelectorAll('.side-tab');
+    if (!tabs.length) return;
+    let hit = false;
+    tabs.forEach((b) => {
+      const on = b.dataset.tab === name;
+      if (on) hit = true;
+      b.classList.toggle('on', on);
+    });
+    if (!hit) return; // tab 名已不存在（旧缓存），保持现状
+    document.querySelectorAll('.side-view').forEach((v) => v.classList.toggle('on', v.dataset.view === name));
+    try { localStorage.setItem(SIDE_TAB_KEY, name); } catch (e) {}
+  }
+
+  function setSideOpen(open) {
+    const side = $('#studioSide');
+    if (!side) return;
+    side.classList.toggle('collapsed', !open);
+    const btn = $('#sideOpen');
+    if (btn) btn.classList.toggle('show', !open);
+    try { localStorage.setItem(SIDE_OPEN_KEY, open ? '1' : '0'); } catch (e) {}
+  }
+
+  // 把当前 state.data 推给预览 iframe（先落盘、再 postMessage，两条路都走一遍）
+  function pushPreview() {
+    const frame = $('#pvFrame');
+    if (!frame || !state.data) return;
+    try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(state.data)); } catch (e) {}
+    try {
+      const w = frame.contentWindow;
+      // 同源 iframe；显式指定 targetOrigin，避免把站点数据发给无关窗口
+      if (w) w.postMessage({ type: 'nav-preview-data', data: state.data }, location.origin);
+    } catch (e) {}
+  }
+
+  function refreshPreview() {
+    const frame = $('#pvFrame');
+    if (!frame) return;
+    pushPreview(); // 先落盘，保证 iframe 重新加载时读到的是最新一份
+    frame.src = 'index.html?preview=1&t=' + Date.now();
+  }
+
+  function bindStudio() {
+    const side = $('#studioSide');
+    if (!side) return;
+
+    // 恢复上次的标签页与展开状态
+    let savedTab = 'home', savedOpen = null;
+    try { savedTab = localStorage.getItem(SIDE_TAB_KEY) || 'home'; } catch (e) {}
+    try { savedOpen = localStorage.getItem(SIDE_OPEN_KEY); } catch (e) {}
+    switchSideTab(savedTab);
+    setSideOpen(savedOpen !== '0');
+
+    $('#sideTabs').addEventListener('click', (e) => {
+      const b = e.target.closest('.side-tab');
+      if (b) switchSideTab(b.dataset.tab);
+    });
+    $('#sideClose').addEventListener('click', () => setSideOpen(false));
+    const openBtn = $('#sideOpen');
+    if (openBtn) openBtn.addEventListener('click', () => setSideOpen(true));
+
+    // —— 预览工具条 ——
+    const seg = $('#pvDeviceSeg');
+    if (seg) {
+      seg.addEventListener('click', (e) => {
+        const b = e.target.closest('.seg-btn');
+        if (!b) return;
+        seg.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('on', x === b));
+        const box = $('#pvDevice');
+        if (box) box.className = 'pv-device ' + (b.dataset.device === 'desk' ? 'desk' : 'mob');
+      });
+    }
+    const rf = $('#pvRefresh');
+    if (rf) rf.addEventListener('click', refreshPreview);
+    const op = $('#pvOpen');
+    if (op) op.addEventListener('click', () => window.open('index.html', '_blank', 'noopener'));
+    const frame = $('#pvFrame');
+    if (frame) frame.addEventListener('load', () => { setTimeout(pushPreview, 80); });
+
+    // —— 「取消」= 放弃未保存的改动，重新从服务端载入 ——
+    const rs = $('#settingsReset');
+    if (rs) rs.addEventListener('click', async () => {
+      if (state.dirty && !confirm('放弃所有未保存的改动，重新载入当前数据？')) return;
+      const st = $('#settingsSaveStatus');
+      if (st) { st.className = 'sf-status'; st.textContent = '正在重新载入…'; }
+      try {
+        await loadData();
+        populateSettings();
+        await loadConfig();
+        refreshPreview();
+        if (st) { st.className = 'sf-status ok'; st.textContent = '已还原为服务端保存的内容'; }
+      } catch (e) {
+        if (st) { st.className = 'sf-status err'; st.textContent = '重新载入失败：' + e.message; }
+      }
+    });
+
+    // —— 侧栏内的任何交互：先把表单值收进 state，再推给预览（节流 120ms）——
+    // 这样开关 / 分段按钮这类「只在保存时才读值」的控件也能即时预览。
+    let timer = null;
+    const schedule = () => {
+      try { collectSettings(); } catch (e) {}
+      clearTimeout(timer);
+      timer = setTimeout(pushPreview, 120);
+    };
+    side.addEventListener('click', (e) => { if (e.target.closest('.seg-btn, button, .switch')) schedule(); });
+    side.addEventListener('input', schedule);
+    side.addEventListener('change', schedule);
   }
 
   /* ================= 主流程 ================= */
@@ -1638,6 +1779,9 @@
     await loadData();
     populateSettings();
     await loadConfig();
+    // 首次把数据同步给预览 iframe：iframe 可能先于数据到达就加载完，
+    // 此时它读到的还是上一次会话残留的预览缓存，这里补一次热更新纠正。
+    pushPreview();
     // 管理员专属：账户列表 + 待审申请（并发拉取，失败不影响主流程）
     await Promise.all([loadAccounts(), loadApplications()]);
   }
@@ -1669,8 +1813,8 @@
       if (notice) notice.style.display = 'none';
       return true;
     }
-    // 非管理员：隐藏全部管理面板，只留提示
-    document.querySelectorAll('.panel').forEach((p) => { p.style.display = 'none'; });
+    // 非管理员：隐藏全部管理面板与右侧设置侧栏，只留提示
+    document.querySelectorAll('.panel, .studio-side').forEach((p) => { p.style.display = 'none'; });
     if (notice) {
       const u = $('#roleNoticeUser');
       if (u) u.textContent = (me && (me.nickname || me.user)) || state.meUser;
@@ -1893,6 +2037,7 @@
     bindTheme();
     bindSettings();
     bindCollapse();
+    bindStudio();       // 右侧设置侧栏 + 首页预览（元素缺失时内部自动跳过）
     bindAccountsUI();   // ⑩ 账户管理 / ⑪ 申请审核 的刷新与筛选（元素缺失时内部自动跳过）
 
     $('#addCat').addEventListener('click', addCat);

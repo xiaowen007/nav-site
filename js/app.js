@@ -96,6 +96,50 @@
     try { localStorage.removeItem(DATA_CACHE_KEY); } catch (e) {}
   }
 
+  /* ===== 后台「首页预览」数据通道 =====
+   * 后台（admin.html）的右侧设置面板会把「内存中尚未保存」的整份数据通过
+   * localStorage + postMessage 送到这里，让后台左侧的实时预览能立刻反映改动。
+   * 只在 URL 带 preview=1 时生效 —— 正常访问首页完全不受影响。
+   */
+  const PREVIEW_MODE = /[?&]preview=1/.test(location.search);
+  const PREVIEW_DATA_KEY = 'nav_preview_data';
+
+  function readPreviewData() {
+    try {
+      const raw = localStorage.getItem(PREVIEW_DATA_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return (d && Array.isArray(d.categories)) ? d : null;
+    } catch (e) { return null; }
+  }
+
+  // 用后台推来的数据在这里就地重渲染整页（顶栏 / 侧栏 / 分类 / 卡片 / 壁纸 / 字体）
+  function applyPreviewData(data) {
+    if (!data || !Array.isArray(data.categories)) return;
+    state.data = data;
+    dropHiddenCategories(state.data);
+    // layout-top / search-above 是「只加不减」的全局 class，顶部导航也是插入式节点：
+    // 必须先把上一次的布局痕迹清干净，否则从「顶部」切回「左侧」时布局回不去。
+    document.documentElement.classList.remove('layout-top', 'search-above');
+    const topNav = document.getElementById('topNav');
+    if (topNav) topNav.remove();
+    buildSidebar();
+    renderHead();
+    renderWebSearch();
+    renderSections();
+    applySettings();
+    updateFavCount();
+  }
+
+  if (PREVIEW_MODE) {
+    window.addEventListener('message', (e) => {
+      if (e.origin !== location.origin) return;   // 只认同源后台推来的数据
+      const d = e.data;
+      if (!d || d.type !== 'nav-preview-data') return;
+      try { applyPreviewData(d.data); } catch (err) {}
+    });
+  }
+
   // 经 <script> 标签读取数据（file:// 兜底）
   function loadDataViaScript() {
     return new Promise((resolve, reject) => {
@@ -152,6 +196,12 @@
   }
 
   async function loadData() {
+    // 后台「首页预览」：优先用后台推来的「尚未保存」的数据，改完即见。
+    // 没有预览数据（第一次打开后台）时照常走下面的在线加载。
+    if (PREVIEW_MODE) {
+      const pv = readPreviewData();
+      if (pv) { state.data = pv; dropHiddenCategories(state.data); return; }
+    }
     let fresh;
     try {
       fresh = await fetchSiteData();

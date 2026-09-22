@@ -131,9 +131,13 @@ a { color: inherit; text-decoration: none; }
   border-radius: 20px;
   background: var(--glass-2);
   font-size: 14px;
+  /* 表单控件的文字色不随 body 继承（UA 样式给的是 fieldtext，无 color-scheme 时即纯黑），
+     必须显式声明，否则深色主题下「黑字 + 半透明深底」等于看不见。 */
+  color: var(--text);
   outline: none;
   transition: border-color .15s, background .15s;
 }
+.search-box input::placeholder { color: var(--muted); }
 .search-box input:focus { border-color: var(--primary); background: var(--glass-hover); }
 
 /* 搜索框刻意用 type="search" 来躲开浏览器密码管理器的自动填充（见 index.html 注释）。
