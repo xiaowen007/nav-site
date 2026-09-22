@@ -1188,13 +1188,32 @@
   }
 
   /* ================= 系统设置（内联面板） ================= */
+  /* 卡片大小：1 极小 / 2 小号 / 3 中号 / 4 大号 / 5 超大。
+     取值与归一化规则必须和 js/app.js 的 cardSizeLevel() 完全一致：
+     老数据里是 small/medium/large（small=原来的「紧凑」= 新尺度的中号），
+     两边都做同一套映射，才不会出现「后台显示中号、前台按别的档渲染」。 */
+  const CARD_SIZE_LABEL = { 1: '极小', 2: '小号', 3: '中号', 4: '大号', 5: '超大' };
+  const CARD_SIZE_LEGACY = { small: 3, medium: 4, large: 5 };
+  function cardSizeLevel(v) {
+    const n = Math.round(+v);
+    if (Number.isFinite(n) && n >= 1 && n <= 5) return n;
+    return CARD_SIZE_LEGACY[v] || 3;
+  }
+  function syncCardSizeUI(lv) {
+    const out = $('#setCardSizeVal');
+    if (out) out.textContent = CARD_SIZE_LABEL[lv] || CARD_SIZE_LABEL[3];
+    document.querySelectorAll('#cardSizeScale span').forEach((el) => {
+      el.classList.toggle('on', +el.dataset.lv === lv);
+    });
+  }
+
   function populateSettings() {
     const s = state.data.site || {};
     $('#setTitle').value = s.title || '';
     $('#setSubtitle').value = s.subtitle || '';
     $('#setFooter').value = s.footer || '';
 
-    ['searchPosition', 'categoryPosition', 'categoryArrangement', 'cardSize', 'wallpaperType'].forEach((k) => {
+    ['searchPosition', 'categoryPosition', 'categoryArrangement', 'wallpaperType'].forEach((k) => {
       // 壁纸类型为空时默认高亮「无」，避免类型按钮全灭导致类型与壁纸值不同步
       const cur = s[k] || (k === 'wallpaperType' ? 'none' : '');
       document.querySelectorAll('.seg-btn[data-key="' + k + '"]').forEach((b) => {
@@ -1211,6 +1230,10 @@
 
     $('#setRememberCategory').checked = !!s.rememberCategory;
     $('#setShowFavorites').checked = s.showFavorites !== false;
+
+    const csLv = cardSizeLevel(s.cardSize);
+    const csEl = $('#setCardSize');
+    if (csEl) { csEl.value = csLv; syncCardSizeUI(csLv); }
 
     $('#setCardColumns').value = s.cardColumns || 0;
     $('#setCardRadius').value = s.cardRadius != null ? s.cardRadius : 14;
@@ -1439,6 +1462,8 @@
     s.defaultCategory = $('#setDefaultCategory').value;
     s.rememberCategory = $('#setRememberCategory').checked;
     s.showFavorites = $('#setShowFavorites').checked;
+    // 卡片大小：滑块存数字档位（1~5），老值 small/medium/large 由 cardSizeLevel 兜底映射
+    s.cardSize = cardSizeLevel($('#setCardSize').value);
     s.cardColumns = +$('#setCardColumns').value || 0;
     s.cardRadius = +$('#setCardRadius').value;
     s.cardShadow = $('#setCardShadow').checked;
@@ -1498,6 +1523,9 @@
     });
 
     $('#setCardRadius').addEventListener('input', (e) => { $('#setCardRadiusVal').textContent = e.target.value; });
+    // 卡片大小滑块：拖动时即时更新刻度高亮（左侧预览由侧栏统一的 input 监听节流推送）
+    const csEl = $('#setCardSize');
+    if (csEl) csEl.addEventListener('input', (e) => syncCardSizeUI(+e.target.value));
     $('#setWallpaperOpacity').addEventListener('input', (e) => { $('#setWallpaperOpacityVal').textContent = (+e.target.value).toFixed(2); });
     $('#setWallpaperBlur').addEventListener('input', (e) => { $('#setWallpaperBlurVal').textContent = e.target.value; });
 
@@ -1764,6 +1792,10 @@
     let timer = null;
     const schedule = () => {
       try { collectSettings(); } catch (e) {}
+      // 拖滑块 / 在输入框里打字同样是「有未保存的改动」，这里统一点亮脏标记。
+      // 之前只有分段按钮和开关会置脏，于是拖完滑块后顶栏「保存更改」既不变色也不呼吸，
+      // 用户很容易以为已经保存过了（预览虽然即时变了，但没落库）。
+      if (!state.dirty) { state.dirty = true; updateSaved(); }
       clearTimeout(timer);
       timer = setTimeout(pushPreview, 120);
     };

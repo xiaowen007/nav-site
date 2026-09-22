@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609222354" />
+  <link rel="stylesheet" href="css/style.css?v=202609230022" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -395,6 +395,26 @@
     .studio-side .seg-btn { padding: 5px 10px; }
     .sr-ctl { display: flex; align-items: center; gap: 8px; }
     .sr-ctl .hint { flex: none; min-width: 42px; text-align: right; }
+    /* —— 卡片大小滑块：刻度条要正好落在滑轨下方 ——
+       刻度只在「滑轨 + 拇指内缩」的宽度内排布，所以它必须和 range 同宽：
+       把 range 与刻度一起放进 .csize-wrap（flex:1），右侧的档位文字留在 wrap 外面。
+       否则刻度会按整行宽度均分，最右的「超大」跑到滑轨之外（第一版就是这样）。 */
+    input[type=range] { accent-color: var(--primary); }
+    .csize-wrap { flex: 1 1 auto; min-width: 0; }
+    .csize-wrap input[type=range] { width: 100%; }
+    .csize-scale {
+      display: flex; justify-content: space-between; gap: 4px;
+      margin: 3px 0 0; padding: 0 8px;      /* 8px ≈ 拇指半径，补偿两端内缩 */
+      font-size: 11.5px; line-height: 1.5; color: var(--muted); user-select: none;
+    }
+    .csize-scale span { transition: color .12s; }
+    /* 首尾刻度按文字宽度回补半个身位，让「极小 / 超大」的**中心**分别对齐滑轨两端 */
+    .csize-scale span:first-child { transform: translateX(-12px); }
+    .csize-scale span:last-child { transform: translateX(12px); }
+    .csize-scale span.on { color: var(--primary); font-weight: 600; }
+    /* 这一行的控件比文字高（滑轨 + 刻度两行），让档位文字与滑轨对齐而不是与整块居中 */
+    .sr-ctl-top { align-items: flex-start; }
+    .sr-ctl-top .hint { padding-top: 3px; }
     /* 窄栏里列表行折成两行：名称 + 删除按钮一行，长的输入框另起一行 */
     .studio-side .font-row, .studio-side .engine-row { flex-wrap: wrap; }
     .studio-side .font-row .ft-name, .studio-side .engine-row .eg-name { flex: 1 1 auto; }
@@ -766,12 +786,17 @@
               <h4>卡片外观</h4>
               <div class="settings-row">
                 <span class="srl">卡片大小</span>
-                <div class="seg">
-                  <button class="seg-btn" data-key="cardSize" data-val="small">紧凑</button>
-                  <button class="seg-btn" data-key="cardSize" data-val="medium">标准</button>
-                  <button class="seg-btn" data-key="cardSize" data-val="large">宽松</button>
+                <div class="sr-ctl sr-ctl-top">
+                  <div class="csize-wrap">
+                    <input type="range" id="setCardSize" min="1" max="5" step="1" aria-label="卡片大小" />
+                    <div class="csize-scale" id="cardSizeScale" aria-hidden="true">
+                      <span data-lv="1">极小</span><span data-lv="2">小号</span><span data-lv="3">中号</span><span data-lv="4">大号</span><span data-lv="5">超大</span>
+                    </div>
+                  </div>
+                  <span id="setCardSizeVal" class="hint" style="min-width:44px">中号</span>
                 </div>
               </div>
+              <p class="settings-hint">左右拖动滑块调整卡片大小，左侧预览会同步变化。中号＝原来的「紧凑」，往左是更小的卡片。</p>
               <div class="settings-row">
                 <span class="srl">列数（0 = 自动）</span>
                 <input type="number" id="setCardColumns" min="0" max="10" style="width:100%" />
@@ -974,6 +999,6 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/admin.js?v=202609222354"></script>
+  <script src="js/admin.js?v=202609230022"></script>
 </body>
 </html>

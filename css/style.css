@@ -266,8 +266,13 @@ a { color: inherit; text-decoration: none; }
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  /* 卡片密度随「卡片大小」档位走：小档位每行塞下更多张，整体观感才真的"更小"。
+     各断点只给「基准最小宽度」，档位通过 --card-scale 倍率统一缩放，
+     这样窄屏的响应式密度阶梯仍然保留（见下方 1440 / 1024 / 640 三个断点）。 */
+  --card-scale: 1;
+  --card-gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(calc(220px * var(--card-scale)), 1fr));
+  gap: var(--card-gap);
 }
 .card {
   position: relative;
@@ -414,10 +419,58 @@ a { color: inherit; text-decoration: none; }
 .cards.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .cards.cols-5 { grid-template-columns: repeat(5, 1fr); }
 .cards.cols-6 { grid-template-columns: repeat(6, 1fr); }
-.cards.size-small .card { padding: 10px; gap: 8px; }
-.cards.size-small .card .thumb { width: 32px; height: 32px; border-radius: 8px; }
-.cards.size-large .card { padding: 18px; gap: 14px; }
-.cards.size-large .card .thumb { width: 48px; height: 48px; border-radius: 12px; }
+/* ===== 卡片大小：5 档，由后台的滑块调节（1 极小 / 2 小号 / 3 中号 / 4 大号 / 5 超大） =====
+   前后台约定：`site.cardSize` 存数字 1~5，前台 cardClasses() 输出 size-1..size-5。
+   历史数据里是 small/medium/large，两端都做同一套兼容映射
+   （small → 3 中号，即原来的「紧凑」；medium → 4；large → 5）。
+   每档改两样东西：
+     · --card-scale：卡片网格最小宽度的倍率（各断点的基准值见 1440/1024/640 三个媒体查询），
+       让"更小的卡片"不只是内边距变窄，而是一行真的能多放几张；
+     · 卡片内部尺寸（内边距 / 图标 / 标题字号 / 收藏星 / 访问量角标）。
+   特异度提醒：`.cards.size-N .card .thumb`(0,4,0) 高于窄屏断点里的 `.card .thumb`(0,2,0)，
+   所以档位在手机上同样生效 —— 这是刻意的。 */
+.cards.size-1 { --card-scale: 0.78; --card-gap: 10px; }
+.cards.size-1 .card { padding: 6px; gap: 5px; }
+.cards.size-1 .card .thumb { width: 22px; height: 22px; border-radius: 6px; font-size: 11px; }
+.cards.size-1 .card .name { font-size: 11.5px; }
+.cards.size-1 .card .desc { font-size: 10px; }
+.cards.size-1 .card .fav-star { top: 2px; right: 3px; width: 16px; height: 16px; font-size: 12px; }
+.cards.size-1 .card .visits-tag { font-size: 9px; bottom: 2px; right: 3px; }
+
+.cards.size-2 { --card-scale: 0.88; --card-gap: 12px; }
+.cards.size-2 .card { padding: 8px; gap: 6px; }
+.cards.size-2 .card .thumb { width: 27px; height: 27px; border-radius: 7px; font-size: 13px; }
+.cards.size-2 .card .name { font-size: 12.5px; }
+.cards.size-2 .card .desc { font-size: 10.5px; }
+.cards.size-2 .card .fav-star { top: 3px; right: 4px; width: 19px; height: 19px; font-size: 13px; }
+.cards.size-2 .card .visits-tag { font-size: 9.5px; bottom: 3px; right: 4px; }
+
+/* 中号：与原「紧凑」完全一致（老数据里的 small 映射到这一档） */
+.cards.size-3 { --card-scale: 1; --card-gap: 14px; }
+.cards.size-3 .card { padding: 10px; gap: 8px; }
+.cards.size-3 .card .thumb { width: 32px; height: 32px; border-radius: 8px; font-size: 14px; }
+.cards.size-3 .card .name { font-size: 13px; }
+.cards.size-3 .card .desc { font-size: 11px; }
+.cards.size-3 .card .fav-star { top: 3px; right: 4px; width: 22px; height: 22px; font-size: 15px; }
+.cards.size-3 .card .visits-tag { font-size: 10px; bottom: 3px; right: 6px; }
+
+/* 大号：等于改动前的默认外观（老数据里的 medium 映射到这一档） */
+.cards.size-4 { --card-scale: 1.08; --card-gap: 14px; }
+.cards.size-4 .card { padding: 14px; gap: 12px; }
+.cards.size-4 .card .thumb { width: 40px; height: 40px; border-radius: 10px; font-size: 16px; }
+.cards.size-4 .card .name { font-size: 14px; }
+.cards.size-4 .card .desc { font-size: 12px; }
+.cards.size-4 .card .fav-star { top: 5px; right: 7px; width: 24px; height: 24px; font-size: 17px; }
+.cards.size-4 .card .visits-tag { font-size: 11px; bottom: 5px; right: 8px; }
+
+/* 超大：与原「宽松」一致（老数据里的 large 映射到这一档） */
+.cards.size-5 { --card-scale: 1.18; --card-gap: 16px; }
+.cards.size-5 .card { padding: 18px; gap: 14px; }
+.cards.size-5 .card .thumb { width: 48px; height: 48px; border-radius: 12px; font-size: 18px; }
+.cards.size-5 .card .name { font-size: 15px; }
+.cards.size-5 .card .desc { font-size: 13px; }
+.cards.size-5 .card .fav-star { top: 7px; right: 9px; width: 26px; height: 26px; font-size: 19px; }
+.cards.size-5 .card .visits-tag { font-size: 11.5px; bottom: 6px; right: 9px; }
 .cards.no-shadow .card { box-shadow: none; }
 .card .visits-tag {
   position: absolute; bottom: 5px; right: 8px;
@@ -535,7 +588,7 @@ body.wallpaper::after {
 /* 大屏（≥1440px） */
 @media (min-width: 1440px) {
   .content { padding: 26px 34px 48px; }
-  .cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(calc(240px * var(--card-scale)), 1fr)); }
 }
 
 /* 平板（≤1024px）：侧栏收进抽屉，卡片列变密 */
@@ -554,10 +607,10 @@ body.wallpaper::after {
   .sidebar.open { transform: translateX(0); }
   .sidebar-mask.show { display: block; }
   .content { padding: 20px 20px 36px; }
-  .cards { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--card-scale)), 1fr)); }
   /* 平板下解除后台设置的固定多列，交给自动填充 */
   .cards.cols-4, .cards.cols-5, .cards.cols-6 {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--card-scale)), 1fr));
   }
   .hero h1 { font-size: 22px; }
   /* 平板：顶栏收窄两个搜索框，按钮只留图标 */
@@ -597,9 +650,9 @@ body.wallpaper::after {
   .tb-searches .ws-badge { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; }
   .ws-badge::after { content: '▾'; font-size: 9px; margin-left: 2px; opacity: .85; }
 
-  .cards { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(calc(140px * var(--card-scale)), 1fr)); gap: 10px; }
   .cards.cols-3, .cards.cols-4, .cards.cols-5, .cards.cols-6 {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(140px * var(--card-scale)), 1fr));
   }
   .card { padding: 10px; gap: 8px; }
   .card .thumb { width: 34px; height: 34px; border-radius: 8px; font-size: 14px; }

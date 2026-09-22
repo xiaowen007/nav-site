@@ -623,9 +623,19 @@
     initScrollSpy();
   }
 
+  /* 卡片大小档位：1 极小 / 2 小号 / 3 中号 / 4 大号 / 5 超大。
+     中号就是原来的「紧凑」，所以老数据里的 small 映射到 3（medium→4、large→5），
+     否则升级后老站点会掉到默认档、看起来像"设置被重置"。
+     无值 / 非法值一律按 3（中号）处理，与后台滑块的默认位置保持一致。 */
+  const CARD_SIZE_LEGACY = { small: 3, medium: 4, large: 5 };
+  function cardSizeLevel(v) {
+    const n = Math.round(+v);
+    if (Number.isFinite(n) && n >= 1 && n <= 5) return n;
+    return CARD_SIZE_LEGACY[v] || 3;
+  }
+
   function cardClasses(s) {
-    const cls = [];
-    if (s.cardSize && s.cardSize !== 'medium') cls.push('size-' + s.cardSize);
+    const cls = ['size-' + cardSizeLevel(s.cardSize)];
     if (s.cardColumns && s.cardColumns >= 2 && s.cardColumns <= 6) cls.push('cols-' + s.cardColumns);
     if (s.cardShadow === false) cls.push('no-shadow');
     return cls.join(' ');
