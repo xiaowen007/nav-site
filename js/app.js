@@ -40,7 +40,9 @@
   function updateFavCount() {
     const n = getFavorites().length;
     const el = document.getElementById('favCount');
-    if (el) { el.textContent = n; el.style.display = n ? '' : 'none'; }
+    // 注意：.fav-count 的样式表默认是 display:none，清成 '' 会回落到 display:none（角标永远不显示），
+    // 必须显式写成 inline-block，否则「收藏数量」永远看不见。
+    if (el) { el.textContent = n; el.style.display = n ? 'inline-block' : 'none'; }
   }
   function reorderFavorites(fromUrl, toUrl) {
     const favs = getFavorites();
@@ -257,6 +259,12 @@
         }
         if (t === '__fav') {
           e.preventDefault();
+          // 再点一次「常用收藏」= 返回全部分类（收藏视图不是死胡同）
+          if (state.view === 'fav') {
+            showAllSections();
+            closeSidebar();
+            return;
+          }
           if (state.keyword) clearSearch();
           state.view = 'fav';
           setActive('__fav');
@@ -472,10 +480,14 @@
   function applySettings() {
     const s = state.data.site || {};
     // 隐藏常用收藏
-    if (s.showFavorites === false) {
-      document.querySelectorAll('.fav-entry').forEach((e) => e.style.display = 'none');
+    // 注意：这里写的是行内样式。若只处理 === false 分支，在后台把开关重新打开后
+    // 行内 display:none 会一直残留在节点上，导致「常用收藏」再也点不出来。两个分支都要处理。
+    const hideFav = s.showFavorites === false;
+    document.querySelectorAll('.fav-entry').forEach((e) => { e.style.display = hideFav ? 'none' : ''; });
+    if (hideFav) {
       // 若当前在收藏视图，自动退回全部
       if (state.active === '__fav') state.active = 'all';
+      if (state.view === 'fav') showAllSections();
     }
     // 分类位置：顶部
     if (s.categoryPosition === 'top') {
@@ -643,8 +655,23 @@
     return card;
   }
 
+  /* 从收藏视图回到「全部分类」浏览。
+   * 收藏视图是个独立视图（正文整体替换），必须给一个显式出口 ——
+   * 否则用户一旦点进「常用收藏」，正文就只剩收藏区块，看起来像「分类全没了」。
+   */
+  function showAllSections() {
+    state.keyword = '';
+    const si = $('#searchInput'); if (si) si.value = '';
+    const sc = $('#searchClear'); if (sc) sc.classList.remove('show');
+    state.view = 'sections';
+    renderSections();
+    setActive('all');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   /* 常用收藏视图：渲染收藏卡片 + 拖拽排序 */
   function renderFavorites() {
+    state.view = 'fav';   // 与 renderSections 对称，避免 state.view 与真实渲染不一致
     const wrap = $('#sections');
     wrap.innerHTML = '';
     const favs = getFavorites();
@@ -652,9 +679,16 @@
     const list = favs.filter((f) =>
       !kw || (f.name + ' ' + (f.desc || '') + ' ' + f.url).toLowerCase().includes(kw));
 
+    const bindBack = () => wrap.querySelectorAll('[data-fav-back]').forEach((b) => {
+      b.addEventListener('click', showAllSections);
+    });
+
     if (list.length === 0) {
       wrap.innerHTML = '<div class="empty">还没有收藏的站点 ⭐<br/>' +
-        '浏览任意分类，点击卡片右上角的 ☆ 即可加入常用收藏</div>';
+        '浏览任意分类，点击卡片右上角的 ☆ 即可加入常用收藏' +
+        '<div class="empty-actions"><button type="button" class="btn primary" data-fav-back>' +
+        '← 返回全部浏览</button></div></div>';
+      bindBack();
       return;
     }
 
@@ -666,6 +700,7 @@
         <span>常用收藏</span>
         <span class="sec-count">${list.length}</span>
         <span class="fav-hint">拖动卡片可调整顺序</span>
+        <button type="button" class="fav-back" data-fav-back>← 返回全部</button>
       </div>
       <div class="cards"></div>`;
     const cards = sec.querySelector('.cards');
@@ -676,6 +711,7 @@
       cards.appendChild(card);
     });
     wrap.appendChild(sec);
+    bindBack();
   }
 
   function bindFavDrag(card, fav) {
@@ -936,6 +972,9 @@
       maskMsg($('#loginMsg'), '');
       const pw = $('#loginPwd'); if (pw) pw.value = '';
       closeMask($('#authMask'));
+      // 登录会打开用户中心弹窗、正文不再是用户刚才看的东西；
+      // 若此前停在收藏视图，这里统一退回「全部分类」，避免登录后正文只剩收藏区块。
+      if (state.view === 'fav') showAllSections();
       openUserCenter();
     } catch (e) {
       maskMsg($('#loginMsg'), '网络错误：' + e.message, 'err');
@@ -1058,6 +1097,8 @@
     acct = { loggedIn: false, user: null, role: null, isAdmin: false };
     renderAcctBtn();
     closeMask($('#userMask'));
+    // 退出登录同样把正文还原成分类浏览，避免残留收藏视图
+    if (state.view === 'fav') showAllSections();
   }
 
   async function init() {

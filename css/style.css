@@ -16,6 +16,30 @@
     "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
   /* 开启壁纸时顶栏 / 侧栏改用半透明面板，让壁纸能全屏透出（不透明面板会挡住壁纸） */
   --panel-translucent: rgba(255, 255, 255, .78);
+
+  /* ===== 毛玻璃（glassmorphism）设计令牌 =====
+   * 页面底层是一层柔和的多点渐变（--page-bg），顶栏 / 侧栏 / 卡片浮在它上面：
+   * 半透明填补 + backdrop-filter 模糊身后内容，滚过长内容时玻璃感最明显。
+   * --bg / --panel 保持不透明，供后台等需要高可读性的区域继续使用。
+   *
+   * 色彩浓度经过实测标定：底色太淡（如 #dce8ff 一档）时，58% 白的玻璃层叠上去
+   * 与纯白几乎无差，毛玻璃在浅色主题下「看不见」；这里刻意把色斑压深一档，
+   * 让玻璃面板透出可见的冷/暖色调，同时仍保持深色文字的高可读性。 */
+  --page-bg:
+    radial-gradient(1100px 620px at 8% -8%, #c3d7ff 0%, rgba(195, 215, 255, 0) 62%),
+    radial-gradient(900px 520px at 102% 2%, #ffcfdf 0%, rgba(255, 207, 223, 0) 58%),
+    radial-gradient(1000px 700px at 48% 112%, #b7eeda 0%, rgba(183, 238, 218, 0) 62%),
+    radial-gradient(760px 460px at 78% 46%, #ffebc9 0%, rgba(255, 235, 201, 0) 60%),
+    linear-gradient(180deg, #ebf0fa 0%, #e6ecf7 100%);
+  --glass-1: rgba(255, 255, 255, .58);   /* 顶栏 / 侧栏 / 顶部导航：面积大、透得多 */
+  --glass-2: rgba(255, 255, 255, .55);   /* 卡片 / 小卡片 */
+  --glass-3: rgba(255, 255, 255, .82);   /* 弹窗 / 下拉：可读性优先 */
+  --glass-hover: rgba(255, 255, 255, .88);
+  --glass-brd: rgba(255, 255, 255, .75);        /* 玻璃上沿高光边 */
+  --glass-brd-soft: rgba(163, 182, 210, .38);   /* 玻璃之间的分隔线 */
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+  --glass-shadow: 0 4px 18px rgba(31, 41, 51, .08);
 }
 
 * { box-sizing: border-box; }
@@ -23,7 +47,6 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
   color: var(--text);
   font-family: var(--font-family);
   font-size: var(--font-size);
@@ -32,9 +55,22 @@ html, body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* 页面底层：柔和的多点渐变，作为毛玻璃「身后被模糊的东西」。
+   必须挂在 html 上而不是 body 上 —— body 要保持透明，
+   否则负 z-index 的壁纸层（body.wallpaper::before）会被 body 自己的背景整块盖住
+   （见下方「壁纸：固定背景层」的说明）。 */
+html {
+  min-height: 100%;
+  background: var(--page-bg);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+body { background: transparent; }
+
 a { color: inherit; text-decoration: none; }
 
-/* 顶栏 */
+/* 顶栏（毛玻璃：吸顶滚动时正文从它身后透过并被模糊） */
 .topbar {
   position: sticky;
   top: 0;
@@ -45,9 +81,11 @@ a { color: inherit; text-decoration: none; }
   flex-wrap: wrap;
   gap: 10px 14px;
   padding: 8px 18px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow);
+  background: var(--glass-1);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-bottom: 1px solid var(--glass-brd-soft);
+  box-shadow: var(--glass-shadow);
 }
 .brand {
   display: flex;
@@ -67,6 +105,11 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
 }
 .ws-wrap { position: relative; flex: 1 1 340px; max-width: 480px; min-width: 0; }
+/* 搜索表单必须是 flex 行：此前没有任何 .ws-form 规则，<form> 按块级排版把
+   「输入框」和「搜索按钮」竖着摞成两行，顶栏实测被撑到 91px。
+   而 --top-h 固定按 60px 算（侧栏 sticky top、锚点 scroll-margin 都基于它），
+   于是滚动时侧栏会被顶栏挡住、锚点跳转也会把标题压在顶栏下面。 */
+.ws-form { display: flex; align-items: center; gap: 8px; }
 /* 顶栏内的尺寸收紧，避免把顶栏撑高 */
 .tb-searches .ws-input-wrap input { height: 36px; font-size: 13px; }
 .tb-searches .ws-go { height: 36px; padding: 0 16px; font-size: 13px; }
@@ -84,14 +127,14 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   height: 38px;
   padding: 0 36px 0 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-brd);
   border-radius: 20px;
-  background: var(--bg);
+  background: var(--glass-2);
   font-size: 14px;
   outline: none;
   transition: border-color .15s, background .15s;
 }
-.search-box input:focus { border-color: var(--primary); background: #fff; }
+.search-box input:focus { border-color: var(--primary); background: var(--glass-hover); }
 .search-clear {
   position: absolute;
   right: 12px;
@@ -131,8 +174,10 @@ a { color: inherit; text-decoration: none; }
   width: var(--side-w);
   height: calc(100vh - var(--top-h));
   flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--border);
+  background: var(--glass-1);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-right: 1px solid var(--glass-brd-soft);
   overflow-y: auto;
   padding: 14px 10px;
 }
@@ -151,14 +196,14 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.side-item:hover { background: var(--bg); }
+.side-item:hover { background: var(--glass-hover); }
 .side-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
 .side-foot {
   margin-top: 14px;
   padding: 10px 12px;
   font-size: 12px;
   color: var(--muted);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--glass-brd-soft);
 }
 .sidebar-mask {
   display: none;
@@ -192,7 +237,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
-  background: var(--bg);
+  background: rgba(123,135,148,.16);
   padding: 2px 8px;
   border-radius: 10px;
 }
@@ -208,23 +253,27 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 12px;
   padding: 14px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  /* 毛玻璃卡片：半透明 + 上沿高光边。刻意不加 backdrop-filter ——
+     卡片数量多（一屏几十张），逐张实时模糊会明显掉帧；
+     背后是柔和渐变 + 半透明填充，肉眼看同样是玻璃质感。 */
+  background: var(--glass-2);
+  border: 1px solid var(--glass-brd);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  transition: transform .12s, box-shadow .12s, border-color .12s;
+  box-shadow: var(--glass-shadow);
+  transition: transform .12s, box-shadow .12s, border-color .12s, background .12s;
 }
 .card:hover {
   transform: translateY(-2px);
+  background: var(--glass-hover);
   border-color: var(--primary);
-  box-shadow: 0 6px 18px rgba(47,111,237,.12);
+  box-shadow: 0 8px 22px rgba(47,111,237,.16);
 }
 .card .thumb {
   width: 40px;
   height: 40px;
   border-radius: 10px;
   flex-shrink: 0;
-  background: var(--bg) center/cover no-repeat;
+  background: rgba(255, 255, 255, .55) center/cover no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -273,15 +322,17 @@ a { color: inherit; text-decoration: none; }
 .fav-star.on { color: #f0a020; }
 
 /* 常用收藏侧栏入口与提示 */
-.fav-entry { font-weight: 600; }
-.fav-entry.active { background: rgba(240,160,32,.14); color: #f0a020; }
+/* 与下方「全部 / 分类」留出间距，降低误点概率（误点会切进收藏视图） */
+.fav-entry { font-weight: 600; margin-bottom: 8px; }
+.fav-entry.active { background: rgba(240,160,32,.18); color: #f0a020; }
 .fav-count {
   margin-left: auto;
   font-size: 12px;
   color: var(--muted);
-  background: var(--bg);
+  background: rgba(123,135,148,.16);
   border-radius: 10px;
   padding: 1px 8px;
+  /* 默认隐藏，有收藏时由 JS 显式改成 inline-block（清成 '' 会回落到这里的 none） */
   display: none;
 }
 .fav-hint {
@@ -290,6 +341,23 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted);
   font-weight: 400;
 }
+/* 收藏视图的出口按钮：收藏视图会整块替换正文，必须给用户一个显式的返回入口 */
+.fav-back {
+  flex: none;
+  padding: 4px 12px;
+  border: 1px solid var(--glass-brd);
+  border-radius: 14px;
+  background: var(--glass-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.fav-back:hover { border-color: var(--primary); color: var(--primary); background: var(--glass-hover); }
+.empty-actions { margin-top: 16px; }
+.empty-actions .btn { display: inline-block; }
 .card.dragging { opacity: .4; }
 .card.drop-over { box-shadow: inset 0 2px 0 var(--primary); }
 
@@ -298,14 +366,17 @@ a { color: inherit; text-decoration: none; }
 .layout-top .sidebar { display: none; }
 .layout-top .top-nav {
   display: flex; padding: 12px 26px; gap: 8px;
-  background: var(--panel); border-bottom: 1px solid var(--border);
+  background: var(--glass-1);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-bottom: 1px solid var(--glass-brd-soft);
 }
 .layout-top .top-nav a {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 14px; border-radius: 18px; font-size: 13px; color: var(--text);
   transition: background .12s, color .12s; flex-shrink: 0;
 }
-.layout-top .top-nav a:hover { background: var(--bg); }
+.layout-top .top-nav a:hover { background: var(--glass-hover); }
 .layout-top .top-nav a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
 /* 单行模式：横向滚动 */
 .layout-top .top-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
@@ -347,10 +418,8 @@ body.wallpaper::after {
   background: rgba(255,255,255,var(--wp-opacity, 0.08));
 }
 [data-theme="dark"] body.wallpaper::after { background: rgba(0,0,0,var(--wp-opacity, 0.08)); }
-/* 顶栏 / 侧栏默认是不透明面板，会挡住壁纸；开启壁纸时改用半透明版本，让壁纸全屏透出 */
-body.wallpaper .topbar,
-body.wallpaper .sidebar,
-body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
+/* 顶栏 / 侧栏 / 顶部导航本身就是毛玻璃层（见 --glass-1）：半透明 + backdrop-filter，
+   壁纸或正文都能从背后透出并被模糊，所以这里不再需要单独的「壁纸模式」覆盖。 */
 
 .empty {
   color: var(--muted);
@@ -373,8 +442,8 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
   position: relative; flex: 1; min-width: 0;
   display: flex; align-items: center; gap: 8px;
   padding: 0 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-brd);
   border-radius: 24px;
   transition: border-color .15s, box-shadow .15s;
 }
@@ -418,16 +487,18 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
   gap: 6px;
   margin-top: 0;
   padding: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--glass-3);
+  -webkit-backdrop-filter: blur(22px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(22px) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-brd);
   border-radius: 12px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--glass-shadow);
   max-height: 240px;
   overflow-y: auto;
 }
 .tb-searches .ws-engines.open { display: flex; }
 .ws-engine {
-  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  border: 1px solid var(--glass-brd); background: var(--glass-2); color: var(--text);
   padding: 5px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
   white-space: nowrap; transition: background .12s, color .12s, border-color .12s;
 }
@@ -535,17 +606,17 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
 
 /* 主题切换按钮 */
 .theme-toggle {
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid var(--glass-brd);
+  background: var(--glass-2);
   color: var(--text);
   width: 38px; height: 38px;
   border-radius: 50%;
   cursor: pointer;
   font-size: 16px;
   display: inline-flex; align-items: center; justify-content: center;
-  transition: background .15s;
+  transition: background .15s, border-color .15s;
 }
-.theme-toggle:hover { background: var(--panel); }
+.theme-toggle:hover { background: var(--glass-hover); border-color: var(--primary); }
 
 /* 深色主题 */
 [data-theme="dark"] {
@@ -558,6 +629,20 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
   --border: #2a3340;
   --shadow: 0 2px 12px rgba(0,0,0,.4);
   --panel-translucent: rgba(26, 33, 43, .78);
+
+  /* 深色毛玻璃：底色压暗，玻璃仍然透出背后的渐变光斑 */
+  --page-bg:
+    radial-gradient(1100px 620px at 8% -8%, #17273f 0%, rgba(23, 39, 63, 0) 62%),
+    radial-gradient(900px 520px at 102% 2%, #2b1c36 0%, rgba(43, 28, 54, 0) 58%),
+    radial-gradient(1000px 700px at 48% 112%, #0f2e2c 0%, rgba(15, 46, 44, 0) 62%),
+    linear-gradient(180deg, #10161d 0%, #0c1015 100%);
+  --glass-1: rgba(26, 33, 43, .62);
+  --glass-2: rgba(30, 38, 50, .58);
+  --glass-3: rgba(26, 33, 43, .86);
+  --glass-hover: rgba(46, 58, 76, .78);
+  --glass-brd: rgba(255, 255, 255, .10);
+  --glass-brd-soft: rgba(255, 255, 255, .08);
+  --glass-shadow: 0 4px 18px rgba(0, 0, 0, .38);
 }
 
 /* 后台登录遮罩 */
@@ -567,8 +652,11 @@ body.wallpaper .layout-top .top-nav { background: var(--panel-translucent); }
   background: rgba(0,0,0,.5);
 }
 .login-box {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 14px; padding: 24px; width: 300px; box-shadow: var(--shadow);
+  background: var(--glass-3);
+  -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-brd);
+  border-radius: 14px; padding: 24px; width: 300px; box-shadow: 0 16px 44px rgba(0,0,0,.22);
 }
 .login-box h3 { margin: 0 0 6px; font-size: 16px; }
 .login-box p { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
@@ -613,7 +701,7 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
 
 /* ===== 侧栏小功能卡片：天气 / 万年历 ===== */
 .mini-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 4px; }
-.mini-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.mini-card { background: var(--glass-2); border: 1px solid var(--glass-brd); border-radius: 12px; padding: 10px 12px; }
 .mini-loading { font-size: 13px; color: var(--text); opacity: .7; }
 .mini-weather .mw-row { display: flex; align-items: center; gap: 8px; }
 .mini-weather .mw-icon { font-size: 24px; line-height: 1; }
@@ -665,7 +753,7 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
 .sub-head .sec-icon { flex: none; display: inline-flex; align-items: center; }
 .sub-head .sec-count {
   font-size: 11px; font-weight: 500; color: var(--muted);
-  background: var(--bg); padding: 1px 7px; border-radius: 10px;
+  background: rgba(123,135,148,.16); padding: 1px 7px; border-radius: 10px;
 }
 .subsection .cards { margin-bottom: 4px; }
 
@@ -678,14 +766,13 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
 
 .acct-btn {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 6px 12px; border: 1px solid var(--border); border-radius: 18px;
-  background: var(--panel); color: var(--text); cursor: pointer;
+  padding: 6px 12px; border: 1px solid var(--glass-brd); border-radius: 18px;
+  background: var(--glass-2); color: var(--text); cursor: pointer;
   font-size: 12.5px; font-family: var(--font-family); white-space: nowrap;
+  transition: border-color .15s, color .15s, background .15s;
 }
-.acct-btn:hover { border-color: var(--primary); color: var(--primary); }
+.acct-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--glass-hover); }
 .acct-btn.logged { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
-/* 壁纸模式：顶栏控件也要半透明，否则会挡住壁纸 */
-body.wallpaper .acct-btn { background: var(--panel-translucent); }
 
 /* 弹窗骨架 */
 [hidden] { display: none !important; }
@@ -697,9 +784,11 @@ body.wallpaper .acct-btn { background: var(--panel-translucent); }
 }
 .modal {
   position: relative; width: 100%; max-width: 380px; max-height: 88vh; overflow: auto;
-  background: var(--panel); color: var(--text);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, .22);
+  background: var(--glass-3); color: var(--text);
+  -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-brd); border-radius: var(--radius);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .22);
   padding: 20px; font-family: var(--font-family); font-size: 14px;
 }
 .modal.wide { max-width: 520px; }
@@ -782,4 +871,15 @@ body.wallpaper .acct-btn { background: var(--panel-translucent); }
   .apply-form { grid-template-columns: 1fr; }
   .apply-form #appUrl, .apply-form .btn { grid-column: span 1; }
   .modal { padding: 16px; max-height: 92vh; }
+  .fav-hint { display: none; }                  /* 触屏不能拖拽排序，提示无意义且挤占标题行 */
+}
+
+/* ===== 毛玻璃降级：不支持 backdrop-filter 时回落到不透明面板，保证可读性 ===== */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .topbar, .sidebar, .layout-top .top-nav { background: var(--panel); }
+  .card, .mini-card { background: var(--glass-hover); }
+  .modal, .login-box, .tb-searches .ws-engines { background: var(--panel); }
+}
+@supports not (background: radial-gradient(#fff 0%, rgba(255,255,255,0) 60%)) {
+  html { background: var(--bg); }
 }
