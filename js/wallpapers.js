@@ -13,8 +13,8 @@
  *           css → 直接是 CSS 背景值（可多层，逗号分隔）
  *           img → 资源路径（本地 assets/wallpapers/ 下的文件）
  *   thumb   仅 img 用：后台网格显示的小图（不填就退回 value）。
- *           导航主题那 20 张主图是 2560x1440、单张 300KB+，
- *           后台一屏 20 格全加载原图会明显卡顿，所以另出一份 480x270 小图。
+ *           高清图款主图是 2560x1440、单张 300KB+，
+ *           后台一屏全加载原图会明显卡顿，所以另出一份 480x270 小图。
  *   type    写入 site.wallpaperType（css 走 'gradient'，img 走 'image'）
  *   opacity 推荐遮罩透明度（磨砂感的关键，比站点默认 0.08 重）
  *   blur    推荐模糊半径 px
@@ -45,6 +45,64 @@
   /* 柔光斑渐变：几个不同色相的 radial-gradient 各自弥散 + 一层同色系
      斜向线性渐变打底。就是「磨砂玻璃后面透出来的光」那种感觉。 */
   var list = [
+    /* ---------- 光伏能源（14 张高清图，成套设计）----------
+       主题：光伏电站的实景与几何。素材是全网抓取的光伏高清图（Unsplash，
+       见 assets/wallpapers/CREDITS.json），**全部无 logo、可商用**；
+       另有 6 张是程序化绘制的光伏几何（组件微距 / 阵列透视），
+       好处是零版权、零体积、几何绝对规整。
+
+       与「导航主题」的区别 —— 这组有自己的主题身份，不是换图标：
+       导航主题的语言是「经纬网 + 虚线路线 + 定位标记」，
+       光伏主题的语言是「电池片矩阵 + 细栅线 + 阵列透视 + 板面反光」：
+         · 电池片栅格层：单晶硅的圆角方形 + 细栅 + 主栅，低透明度通铺
+         · 板面反光：30° 斜向高光带（阳光打在组件玻璃上那道亮）
+         · 能量连线：虚线 + 节点，语义从「路线」换成「电流汇流」
+         · 光伏图标集：组件 / 阵列 / 太阳 / 辐照 / 逆变器 / 储能 / 电网 /
+           并网点 / 屋顶光伏 / 水上光伏 / 农光互补 / 减排 / 发电曲线 / 汇流
+       深底图会自动切白线（底色亮度 < 146 时），否则线条整片沉进背景。 */
+    { id: 'wp:pv-01', name: '光伏海航拍', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-01.jpg', thumb: 'assets/wallpapers/pv-01.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:pv-02', name: '阵列俯瞰', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-02.jpg', thumb: 'assets/wallpapers/pv-02.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:pv-03', name: '天光阵列', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-03.jpg', thumb: 'assets/wallpapers/pv-03.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:pv-04', name: '蓝海之镜', kind: 'img', group: 'pv', dark: true,
+      value: 'assets/wallpapers/pv-04.jpg', thumb: 'assets/wallpapers/pv-04.t.jpg',
+      opacity: 0.18, blur: 0 },
+    { id: 'wp:pv-05', name: '硅片透视', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-05.jpg', thumb: 'assets/wallpapers/pv-05.t.jpg',
+      opacity: 0.16, blur: 0 },
+    { id: 'wp:pv-06', name: '光伏与林带', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-06.jpg', thumb: 'assets/wallpapers/pv-06.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:pv-07', name: '板阵与风机', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-07.jpg', thumb: 'assets/wallpapers/pv-07.t.jpg',
+      opacity: 0.15, blur: 0 },
+    { id: 'wp:pv-08', name: '朝阳电站', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-08.jpg', thumb: 'assets/wallpapers/pv-08.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:pv-09', name: '组件微距', kind: 'img', group: 'pv', dark: true,
+      value: 'assets/wallpapers/pv-09.jpg', thumb: 'assets/wallpapers/pv-09.t.jpg',
+      opacity: 0.18, blur: 0 },
+    { id: 'wp:pv-10', name: '单晶夜幕', kind: 'img', group: 'pv', dark: true,
+      value: 'assets/wallpapers/pv-10.jpg', thumb: 'assets/wallpapers/pv-10.t.jpg',
+      opacity: 0.20, blur: 0 },
+    { id: 'wp:pv-11', name: '光伏海几何', kind: 'img', group: 'pv', dark: true,
+      value: 'assets/wallpapers/pv-11.jpg', thumb: 'assets/wallpapers/pv-11.t.jpg',
+      opacity: 0.20, blur: 0 },
+    { id: 'wp:pv-12', name: '晨光阵列海', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-12.jpg', thumb: 'assets/wallpapers/pv-12.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:pv-13', name: '雨后光带', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-13.jpg', thumb: 'assets/wallpapers/pv-13.t.jpg',
+      opacity: 0.16, blur: 0 },
+    { id: 'wp:pv-14', name: '白昼极简', kind: 'img', group: 'pv',
+      value: 'assets/wallpapers/pv-14.jpg', thumb: 'assets/wallpapers/pv-14.t.jpg',
+      opacity: 0.14, blur: 0 },
+
     /* ---------- 导航主题（20 张高清图，成套设计）----------
        来源：全网抓取的高清原图（Unsplash，见 assets/wallpapers/CREDITS.json），
        再用同一套设计语言重制：磨砂柔化底 + 细颗粒 + 经纬网 + 虚线路线 +
@@ -233,6 +291,7 @@
   ];
 
   var groups = [
+    { id: 'pv', name: '光伏能源', hint: '14 张光伏主题：电站实景 + 组件微距，电池片栅格与阵列透视' },
     { id: 'nav', name: '导航主题', hint: '20 张高清成套壁纸：磨砂透明底 + 定位标记/地址标签/链接等线条图标' },
     { id: 'frost', name: '磨砂玻璃', hint: '渐变 + 噪点颗粒，最接近真实磨砂质感' },
     { id: 'soft', name: '柔光弥散', hint: '纯渐变、零体积，最轻量' },
@@ -241,7 +300,7 @@
   ];
 
   var byValue = {};
-  /* type 由 kind 推导，不手写：46 项手写一遍迟早写漏一个，
+  /* type 由 kind 推导，不手写：60 项手写一遍迟早写漏一个，
      而漏掉的那项会被前台当成 image 去包 url()，渐变就渲染不出来了。
      （后台点选时是拿 item.type 去写 wallpaperType 的，必须每项都有。） */
   list.forEach(function (it) {

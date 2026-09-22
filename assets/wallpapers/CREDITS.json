@@ -1,5 +1,30 @@
 {
-  "note": "预置壁纸来源与授权。分两组：导航主题（20 张，Unsplash 高清原图 + 本项目统一设计语言重制）与自然风景（8 张，Bing 每日壁纸公开接口）。",
+  "note": "预置壁纸来源与授权。分三组：光伏能源（14 张：8 张 Unsplash 光伏实景 + 6 张程序化绘制的光伏几何）、导航主题（20 张，Unsplash 高清原图 + 本项目统一设计语言重制）与自然风景（8 张，Bing 每日壁纸公开接口）。全部无 logo、无第三方品牌标识。",
+  "pv": {
+    "group": "光伏能源",
+    "source": "实景 8 张来自 Unsplash（https://unsplash.com）；几何 6 张为本项目程序化绘制，不依赖任何外部素材",
+    "license": "实景：Unsplash License —— 可免费商用、无需署名（此处仍保留出处以示尊重）。几何：本项目原创。",
+    "fetched": "2026-09-23",
+    "size": "2560x1440（另有 480x270 的 .t.jpg 缩略图，仅供后台预览网格使用）",
+    "design": "与「导航主题」共用同一套输出管线，但主题语言不同 —— 导航主题用「经纬网 + 虚线路线 + 定位标记」，光伏主题用「电池片矩阵 + 细栅线 + 阵列透视 + 板面反光」：单晶硅的圆角方形电池片 + 细栅/主栅低透明度通铺、30° 板面反光带、语义为「电流汇流」的虚线与节点、光伏图标集（组件 / 阵列 / 太阳 / 辐照 / 逆变器 / 储能 / 电网 / 并网点 / 屋顶光伏 / 水上光伏 / 农光互补 / 减排 / 发电曲线 / 汇流）。实景款均经磨砂柔化处理（简洁 / 透明 / 磨砂），深底自动切白线。",
+    "no_logo_note": "8 张实景素材筛选时已排除带水印的付费图库（dreamstime / alamy / vecteezy / freepik 等），并逐张看过成图确认画面内无企业 logo、无品牌标识、无人物肖像 —— 这正是企业宣传片素材通常的来源（免费商用图库），但不存在截取宣传片画面的版权风险。",
+    "items": [
+      { "file": "pv-01.jpg", "name": "光伏海航拍", "op": "array",      "kind": "photo", "src": "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9" },
+      { "file": "pv-02.jpg", "name": "阵列俯瞰",   "op": "module",     "kind": "photo", "src": "https://images.unsplash.com/photo-1497440001374-f26997328c1b" },
+      { "file": "pv-03.jpg", "name": "天光阵列",   "op": "sun",        "kind": "photo", "src": "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d" },
+      { "file": "pv-04.jpg", "name": "蓝海之镜",   "op": "irradiance", "kind": "photo", "src": "https://images.unsplash.com/photo-1509391366360-2e959784a276" },
+      { "file": "pv-05.jpg", "name": "硅片透视",   "op": "module",     "kind": "photo", "src": "https://images.unsplash.com/photo-1545209463-e2825498edbf" },
+      { "file": "pv-06.jpg", "name": "光伏与林带", "op": "agri",       "kind": "photo", "src": "https://images.unsplash.com/photo-1592833159155-c62df1b65634" },
+      { "file": "pv-07.jpg", "name": "板阵与风机", "op": "grid",       "kind": "photo", "src": "https://images.unsplash.com/photo-1595437193398-f24279553f4f" },
+      { "file": "pv-08.jpg", "name": "朝阳电站",   "op": "sun",        "kind": "photo", "src": "https://images.unsplash.com/photo-1613665813446-82a78c468a1d" },
+      { "file": "pv-09.jpg", "name": "组件微距",   "op": "module",     "kind": "generated" },
+      { "file": "pv-10.jpg", "name": "单晶夜幕",   "op": "storage",    "kind": "generated" },
+      { "file": "pv-11.jpg", "name": "光伏海几何", "op": "array",      "kind": "generated" },
+      { "file": "pv-12.jpg", "name": "晨光阵列海", "op": "sun",        "kind": "generated" },
+      { "file": "pv-13.jpg", "name": "雨后光带",   "op": "water",      "kind": "generated" },
+      { "file": "pv-14.jpg", "name": "白昼极简",   "op": "leaf",       "kind": "generated" }
+    ]
+  },
   "nav": {
     "group": "导航主题",
     "source": "Unsplash（https://unsplash.com）",

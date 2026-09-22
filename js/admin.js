@@ -1772,7 +1772,7 @@
 
   /* ================= 预置壁纸（导航主题 20 张 + 磨砂类为主，随项目自带） ================= */
   // 默认停在「导航主题」——那是本项目的成套装壁纸，进来先看到它最有用。
-  let wpPresetGroup = 'nav';
+  let wpPresetGroup = 'pv';
 
   function renderWallpaperPresets() {
     const grid = $('#wpPresetGrid');
