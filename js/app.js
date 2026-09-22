@@ -567,7 +567,17 @@
       return;
     }
     document.body.classList.add('wallpaper');
-    const bg = type === 'image' ? 'url("' + val.replace(/"/g, '\\"') + '")' : val;
+    // 图片地址要先解析成绝对 URL 再交给 CSS：
+    // background 这条声明写在 css/style.css 里，CSS 中的相对 URL 是**相对于该样式表**
+    // 解析的 —— 直接写 assets/wallpapers/a.jpg 会变成 /css/assets/wallpapers/a.jpg（404）。
+    // 按 document.baseURI 解析，站点部署在根路径或子路径（如 GitHub Pages 的 /repo/）都对。
+    let bgVal = val;
+    if (type === 'image') {
+      try {
+        if (!/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/)/i.test(val)) bgVal = new URL(val, document.baseURI).href;
+      } catch (e) { bgVal = val; }   // 解析失败就原样用，交给浏览器去试
+    }
+    const bg = type === 'image' ? 'url("' + bgVal.replace(/"/g, '\\"') + '")' : val;
     document.body.style.setProperty('--wp-bg', bg);
     document.body.style.setProperty('--wp-opacity', s.wallpaperOpacity != null ? s.wallpaperOpacity : 0.08);
     document.body.style.setProperty('--wp-blur', (s.wallpaperBlur || 0) + 'px');

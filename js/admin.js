@@ -1261,13 +1261,17 @@
     $('#setHeroTitle').value = s.heroTitle || '';
     $('#setHeroSub').value = s.heroSub || '';
 
-    ['searchPosition', 'categoryPosition', 'categoryArrangement', 'wallpaperType'].forEach((k) => {
-      // 壁纸类型为空时默认高亮「无」，避免类型按钮全灭导致类型与壁纸值不同步
-      const cur = s[k] || (k === 'wallpaperType' ? 'none' : '');
+    ['searchPosition', 'categoryPosition', 'categoryArrangement'].forEach((k) => {
+      const cur = s[k] || '';
       document.querySelectorAll('.seg-btn[data-key="' + k + '"]').forEach((b) => {
         b.classList.toggle('on', b.dataset.val === cur);
       });
     });
+
+    // 壁纸类型的高亮**必须与前台真正渲染的东西一致**：
+    // 有值却高亮「无」的话，用户看到的界面和保存出来的数据是两回事
+    // （老数据 / 只填了值没选类型的情况都属此类）。所以这里按「值」推断一次。
+    syncWallpaperTypeUI(s.wallpaperValue, s.wallpaperType);
 
     const sel = $('#setDefaultCategory');
     sel.innerHTML = '<option value="all">默认 [全部]</option>' +
@@ -1294,6 +1298,8 @@
     $('#setWallpaperOpacityVal').textContent = s.wallpaperOpacity != null ? (+s.wallpaperOpacity).toFixed(2) : '0.08';
     $('#setWallpaperBlur').value = s.wallpaperBlur || 0;
     $('#setWallpaperBlurVal').textContent = s.wallpaperBlur || 0;
+    // 预置壁纸格子的「当前选中」高亮（值可能是内置款，也可能是用户手填的地址）
+    syncWallpaperPickUI();
 
     // 字体（内置预设 + 自定义字体列表）
     $('#setFontSize').value = s.fontSize || 14;
@@ -1511,6 +1517,38 @@
     return 'image';
   }
 
+  /* 纯函数：由「壁纸值」与「用户点选的类型」推出最终类型。无副作用，两处共用。
+   *
+   * 规则（按优先级）：
+   *   ① 没有值            → 'none'（关闭壁纸）
+   *   ② 没点过 / 点的是「无」→ 按值推断（用户直接粘地址是最常见的用法）
+   *   ③ 点过具体类型       → 尊重用户选择；但若值与类型**明显矛盾**再纠正
+   *      （例如点了「图片」却填了 linear-gradient(...)，前台会把它当 URL 包成
+   *       url("linear-gradient(...)") 而渲染失败），'image' 作为兜底值不参与纠正。 */
+  function resolveWallpaperType(value, picked) {
+    const val = String(value == null ? '' : value).trim();
+    if (!val) return 'none';
+    const p = picked || '';
+    if (!p || p === 'none') return guessWallpaperType(val);
+    const guessed = guessWallpaperType(val);
+    if (guessed !== 'image' && guessed !== p) return guessed;
+    return p;
+  }
+
+  /* 把「壁纸类型」四个按钮的高亮，同步成与当前值真正一致的类型。
+   *
+   * 为什么需要它：有值却高亮「无」的话，界面和保存出来的数据是两回事 ——
+   * 用户看着输入框里明明有地址、类型却写着「无」，点保存后主页当然没反应，
+   * 而且完全看不出问题出在哪。老数据（只有值没有类型）、只填值没点类型
+   * 这两种情况都靠这里纠正。 */
+  function syncWallpaperTypeUI(value, type) {
+    const cur = resolveWallpaperType(value, type);
+    document.querySelectorAll('.seg-btn[data-key="wallpaperType"]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.val === cur);
+    });
+    return cur;
+  }
+
   /* 把侧栏表单里的当前值收集进 state.data.site（只写内存，不落库）。
    * 「保存设置」与「实时预览」共用这一份逻辑：预览要在未保存时就反映改动，
    * 所以必须和保存走同样的取值路径，否则两边会看到不一样的结果。 */
@@ -1539,12 +1577,20 @@
     s.showVisits = $('#setShowVisits').checked;
     const wpVal = $('#setWallpaperValue').value.trim();
     s.wallpaperValue = wpVal;
-    // 壁纸类型必须与壁纸值一起保存：缺失类型时前台会直接跳过壁纸渲染，
-    // 表现为「后台设置了壁纸、主页毫无变化」。
+    // 壁纸类型必须与壁纸值**一致**：前台 applyWallpaper() 只要读到
+    // type === 'none' 就直接走清理分支（连值都不看），所以类型一旦落错，
+    // 表现就是「后台明明设了壁纸、主页毫无变化」。
+    //
+    // ⚠️ 这里踩过一个坑：原先是
+    //     if (wpBtn) s.wallpaperType = wpBtn.dataset.val;
+    //     else if (wpVal) s.wallpaperType = guessWallpaperType(wpVal);
+    //   而 populateSettings() 在没有类型时会把「无」按钮点亮（避免类型全灭），
+    //   于是 wpBtn **永远非空**，guessWallpaperType 那条兜底永远走不到 ——
+    //   用户只在输入框填了图片地址、没点「图片」按钮，存出来就是
+    //   { type: 'none', value: 'https://…/a.jpg' }，主页一片空白。
+    //   现在统一走 resolveWallpaperType（与按钮高亮同一套判断，不会再漂移）。
     const wpBtn = document.querySelector('.seg-btn[data-key="wallpaperType"].on');
-    if (wpBtn) s.wallpaperType = wpBtn.dataset.val;
-    else if (wpVal) s.wallpaperType = guessWallpaperType(wpVal);
-    else s.wallpaperType = 'none';
+    s.wallpaperType = resolveWallpaperType(wpVal, wpBtn && wpBtn.dataset.val);
     s.wallpaperOpacity = +$('#setWallpaperOpacity').value;
     s.wallpaperBlur = +$('#setWallpaperBlur').value;
     // 字体
@@ -1603,6 +1649,53 @@
     if (csEl) csEl.addEventListener('input', (e) => syncCardSizeUI(+e.target.value));
     $('#setWallpaperOpacity').addEventListener('input', (e) => { $('#setWallpaperOpacityVal').textContent = (+e.target.value).toFixed(2); });
     $('#setWallpaperBlur').addEventListener('input', (e) => { $('#setWallpaperBlurVal').textContent = e.target.value; });
+
+    // 壁纸「值」输入框：改值的瞬间把类型按钮同步过去。
+    // 用户直接粘贴一个图片地址时，类型会自动跳成「图片」——
+    // 不再出现「有地址却亮着『无』」的割裂状态（这正是「设了壁纸但主页没反应」的老病根）。
+    $('#setWallpaperValue').addEventListener('input', (e) => {
+      syncWallpaperTypeUI(e.target.value, '');
+      syncWallpaperPickUI();
+    });
+
+    // 预置壁纸：点格子 = 把该款的「值 + 类型 + 推荐透明度/模糊」一次性写进表单。
+    // 与站点图标选择器同一套路：#setWallpaperValue 仍是唯一数据源，
+    // 写完交给侧栏统一的 click 委托去 collectSettings + pushPreview，
+    // 不在这里重复调 pushPreview（两边都推会出现先后覆盖）。
+    const wpPresetGrid = $('#wpPresetGrid');
+    if (wpPresetGrid) {
+      wpPresetGrid.addEventListener('click', (e) => {
+        const cell = e.target.closest('.wp-pick');
+        if (!cell) return;
+        const item = window.NAV_WALLPAPERS &&
+          window.NAV_WALLPAPERS.list.find((x) => x.id === cell.dataset.wp);
+        if (!item) return;
+        $('#setWallpaperValue').value = item.value;
+        syncWallpaperTypeUI(item.value, item.type);
+        if (item.opacity != null) {
+          $('#setWallpaperOpacity').value = item.opacity;
+          $('#setWallpaperOpacityVal').textContent = (+item.opacity).toFixed(2);
+        }
+        if (item.blur != null) {
+          $('#setWallpaperBlur').value = item.blur;
+          $('#setWallpaperBlurVal').textContent = item.blur;
+        }
+        syncWallpaperPickUI();
+        const st = $('#wallpaperPickStatus');
+        if (st) st.textContent = '已选「' + item.name + '」，点「保存设置」生效';
+      });
+      // 切换分组
+      const tabs = $('#wpPresetTabs');
+      if (tabs) {
+        tabs.addEventListener('click', (e) => {
+          const b = e.target.closest('.wp-ptab');
+          if (!b) return;
+          wpPresetGroup = b.dataset.group;
+          tabs.querySelectorAll('.wp-ptab').forEach((x) => x.classList.toggle('on', x === b));
+          renderWallpaperPresets();
+        });
+      }
+    }
 
     // 字体：实时显示数值
     $('#setFontSize').addEventListener('input', (e) => { $('#setFontSizeVal').textContent = e.target.value + 'px'; });
@@ -1666,6 +1759,8 @@
         document.querySelectorAll('.seg-btn[data-key="wallpaperType"]').forEach((x) => x.classList.toggle('on', x.dataset.val === 'image'));
         state.dirty = true; updateSaved();
         st.textContent = '✓ 已上传并设为壁纸';
+        // 值已被换成上传的图片地址，预置格子的高亮要跟着撤掉（否则会停在上一次点过的款上）
+        syncWallpaperPickUI();
         prev.src = url; prev.style.display = 'inline-block';
         const sv = $('#settingsSaveStatus');
         if (sv) { sv.className = 'sf-status'; sv.textContent = '壁纸已选中，点「保存设置」生效'; }
@@ -1673,6 +1768,53 @@
       } catch (err) { st.textContent = '上传失败：' + err.message; }
       e.target.value = '';
     });
+  }
+
+  /* ================= 预置壁纸（磨砂类为主，随项目自带） ================= */
+  let wpPresetGroup = 'frost';
+
+  function renderWallpaperPresets() {
+    const grid = $('#wpPresetGrid');
+    const tabs = $('#wpPresetTabs');
+    if (!grid || !window.NAV_WALLPAPERS) return;
+    const W = window.NAV_WALLPAPERS;
+
+    // 分组按钮只建一次，之后只切换高亮
+    if (tabs && !tabs.children.length) {
+      tabs.innerHTML = W.groups.map((g) =>
+        '<button class="wp-ptab' + (g.id === wpPresetGroup ? ' on' : '') + '" type="button" data-group="' +
+        esc(g.id) + '" title="' + esc(g.hint) + '">' + esc(g.name) + '</button>'
+      ).join('');
+    } else if (tabs) {
+      tabs.querySelectorAll('.wp-ptab').forEach((b) => b.classList.toggle('on', b.dataset.group === wpPresetGroup));
+    }
+
+    const items = W.list.filter((x) => x.group === wpPresetGroup);
+    grid.innerHTML = items.map((it) => {
+      // 预览块：直接把它自己的背景值铺上去（css 款用 style，图片款用 img），
+      // 这样「所见即所得」——不用点进去才知道长什么样。
+      const swatch = it.kind === 'img'
+        ? '<img src="' + esc(it.value) + '" alt="" loading="lazy"/>'
+        : '<i style="background:' + esc(it.value) + '"></i>';
+      return '<button class="wp-pick" type="button" data-wp="' + esc(it.id) +
+        '" title="' + esc(it.name) + '">' + swatch +
+        '<span class="wp-pick-name">' + esc(it.name) + '</span></button>';
+    }).join('');
+    syncWallpaperPickUI();
+  }
+
+  /* 给格子打「当前选中」高亮：按 #setWallpaperValue 反查是哪一款预置。
+     值对不上任何一款（用户手填的地址）时就全部取消高亮，不做模糊匹配。 */
+  function syncWallpaperPickUI() {
+    const grid = $('#wpPresetGrid');
+    if (!grid || !window.NAV_WALLPAPERS) return;
+    const cur = ($('#setWallpaperValue') ? $('#setWallpaperValue').value : '').trim();
+    const hit = window.NAV_WALLPAPERS.find(cur);
+    grid.querySelectorAll('.wp-pick').forEach((c) => {
+      c.classList.toggle('on', !!hit && c.dataset.wp === hit.id);
+    });
+    const nameEl = $('#wallpaperCurName');
+    if (nameEl) nameEl.textContent = hit ? hit.name : (cur ? '自定义' : '未设置');
   }
 
   /* ================= 在线壁纸库 ================= */
@@ -1714,6 +1856,7 @@
         d.classList.add('on');
         state.dirty = true; updateSaved();
         $('#wpStatus').textContent = '✓ 已选为壁纸，点「保存设置」生效';
+        syncWallpaperPickUI();   // 在线库选的是外链，预置格子的高亮要让位
         pushPreview();
       });
       grid.appendChild(d);
@@ -1908,6 +2051,9 @@
     // 站点图标格子先铺好：它只依赖 js/logos.js，不依赖导航数据，
     // 且必须在 populateSettings()（里面会调 syncLogoUI 打高亮）之前完成。
     renderLogoPicker();
+    // 预置壁纸同理：只依赖 js/wallpapers.js；高亮由 populateSettings 里的
+    // syncWallpaperPickUI 补（那时才有真实的 wallpaperValue 可比对）
+    renderWallpaperPresets();
     await loadData();
     populateSettings();
     await loadConfig();

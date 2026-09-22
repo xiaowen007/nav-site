@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230133" />
+  <link rel="stylesheet" href="css/style.css?v=202609230158" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -266,6 +266,42 @@
       padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .wp-empty { font-size: 12px; color: var(--muted); padding: 10px 0; }
+
+    /* 预置壁纸：分组按钮 + 色块网格。
+       每个格子的预览直接铺它自己的背景值（css 款用 <i> 的 background，
+       图片款用 <img>），所见即所得，不用点进去才知道长什么样。 */
+    .wp-pick-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 8px; margin: 2px 0 8px; flex-wrap: wrap;
+    }
+    .wp-pick-head b { color: var(--text); }
+    .wp-ptabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .wp-ptab {
+      font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+      background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+      transition: border-color .12s, color .12s, background .12s;
+    }
+    .wp-ptab:hover { border-color: var(--primary); color: var(--text); }
+    .wp-ptab.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .wp-pick-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+      gap: 8px;
+    }
+    .wp-pick {
+      position: relative; padding: 0; cursor: pointer; overflow: hidden;
+      aspect-ratio: 4 / 3; border-radius: 9px; border: 2px solid var(--border);
+      background: var(--panel);
+      transition: border-color .12s, transform .12s, box-shadow .12s;
+    }
+    .wp-pick:hover { border-color: var(--primary); transform: translateY(-1px); }
+    .wp-pick.on { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(47,111,237,.22); }
+    .wp-pick i { display: block; width: 100%; height: 100%; }
+    .wp-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .wp-pick-name {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      font-size: 10px; line-height: 1.4; color: #fff; background: rgba(0,0,0,.48);
+      padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
     /* 普通用户登录后台时的提示条 */
     .role-notice {
@@ -948,7 +984,10 @@
               <div class="settings-row">
                 <span class="srl">遮罩透明度</span>
                 <div class="sr-ctl">
-                  <input type="range" id="setWallpaperOpacity" min="0" max="1" step="0.05" />
+                  <!-- step 必须是 0.01 而不是 0.05：站点默认值是 0.08，
+                       用 0.05 的步长浏览器会把 input.value 吸附到 0.1，
+                       于是「什么都没动」点一下保存，透明度就悄悄从 0.08 变成 0.1。 -->
+                  <input type="range" id="setWallpaperOpacity" min="0" max="1" step="0.01" />
                   <span id="setWallpaperOpacityVal" class="hint">0.08</span>
                 </div>
               </div>
@@ -960,6 +999,24 @@
                 </div>
               </div>
               <p class="settings-hint">点「📁 选择本地图片」可直接上传作壁纸，上传后自动切到「图片」类型并填好地址；也可手动粘贴图片 URL / 渐变 CSS / 颜色值。上传的图片存于 <code>uploads/</code>（Cloudflare 下为 R2）。</p>
+            </div>
+
+            <!-- 预置壁纸：格子由 js/wallpapers.js 生成。
+                 #setWallpaperValue 仍是唯一数据源，点格子 = 往它写值 +
+                 同步类型与推荐的透明度 / 模糊，随后走壁纸面板既有的那条链路。 -->
+            <div class="settings-section">
+              <h4>预置壁纸</h4>
+              <div class="wp-pick-head">
+                <span class="hint">当前：<b id="wallpaperCurName">未设置</b></span>
+                <span class="hint" id="wallpaperPickStatus"></span>
+              </div>
+              <div class="wp-ptabs" id="wpPresetTabs"><!-- 分组按钮由 JS 注入 --></div>
+              <div class="wp-pick-grid" id="wpPresetGrid"><!-- 格子由 JS 注入 --></div>
+              <p class="settings-hint">
+                点一下即可套用（同时带上该款推荐的<b>遮罩透明度</b>与<b>模糊</b>值，磨砂感就是这么来的），
+                再点「保存设置」生效。<b>磨砂玻璃</b>组是渐变叠加细噪点颗粒，最接近真实的磨砂质感；
+                <b>柔光弥散</b>组为纯渐变、零体积；<b>自然风景</b>组随项目自带，不依赖外链。
+              </p>
             </div>
 
             <div class="settings-section">
@@ -1101,7 +1158,8 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202609230133"></script>
-  <script src="js/admin.js?v=202609230133"></script>
+  <script src="js/logos.js?v=202609230158"></script>
+  <script src="js/wallpapers.js?v=202609230158"></script>
+  <script src="js/admin.js?v=202609230158"></script>
 </body>
 </html>
