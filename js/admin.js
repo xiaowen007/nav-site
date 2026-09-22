@@ -1770,8 +1770,9 @@
     });
   }
 
-  /* ================= 预置壁纸（磨砂类为主，随项目自带） ================= */
-  let wpPresetGroup = 'frost';
+  /* ================= 预置壁纸（导航主题 20 张 + 磨砂类为主，随项目自带） ================= */
+  // 默认停在「导航主题」——那是本项目的成套装壁纸，进来先看到它最有用。
+  let wpPresetGroup = 'nav';
 
   function renderWallpaperPresets() {
     const grid = $('#wpPresetGrid');
@@ -1793,8 +1794,10 @@
     grid.innerHTML = items.map((it) => {
       // 预览块：直接把它自己的背景值铺上去（css 款用 style，图片款用 img），
       // 这样「所见即所得」——不用点进去才知道长什么样。
+      // 图片款优先用 thumb 小图：导航主题那 20 张原图单张 300KB+，
+      // 后台一屏 20 格全拉原图会卡；小图只有 10KB 左右，铺在 100px 的格子里完全够看。
       const swatch = it.kind === 'img'
-        ? '<img src="' + esc(it.value) + '" alt="" loading="lazy"/>'
+        ? '<img src="' + esc(it.thumb || it.value) + '" alt="" loading="lazy"/>'
         : '<i style="background:' + esc(it.value) + '"></i>';
       return '<button class="wp-pick" type="button" data-wp="' + esc(it.id) +
         '" title="' + esc(it.name) + '">' + swatch +

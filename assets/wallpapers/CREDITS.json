@@ -1,53 +1,48 @@
 {
-  "note": "预置风景壁纸，取自 Bing 每日壁纸公开接口（cn.bing.com/HPImageArchive），版权归原作者所有，仅供个人导航站背景使用。",
-  "items": [
-    {
-      "file": "scene-1.jpg",
-      "date": "20260922",
-      "credit": "地坛公园秋日美景，北京，中国 (© by Wei/Adobestock)",
-      "bytes": 340008
-    },
-    {
-      "file": "scene-2.jpg",
-      "date": "20260921",
-      "credit": "瓜兹曼山口附近的秋日山杨林，犹他州，美国 (© Danita Delimont/Shutterstock)",
-      "bytes": 325233
-    },
-    {
-      "file": "scene-3.jpg",
-      "date": "20260920",
-      "credit": "正在梳理皮毛的海獭，蒙特雷湾，加利福尼亚州，美国 (© Suzi Eszterhas/Minden Pictures)",
-      "bytes": 321887
-    },
-    {
-      "file": "scene-4.jpg",
-      "date": "20260919",
-      "credit": "日落时分的埃菲尔铁塔，巴黎，法国 (© Alexander Spatari/Getty Images)",
-      "bytes": 332800
-    },
-    {
-      "file": "scene-5.jpg",
-      "date": "20260918",
-      "credit": "阿尔卑斯长号演奏者，巴伐利亚州，德国 (© U. J. Alexander/Shutterstock)",
-      "bytes": 335744
-    },
-    {
-      "file": "scene-6.jpg",
-      "date": "20260917",
-      "credit": "温纳茨山口，峰区国家公园，英格兰 (© Daniel_Kay/Getty Images)",
-      "bytes": 336629
-    },
-    {
-      "file": "scene-7.jpg",
-      "date": "20260916",
-      "credit": "桑特奈葡萄酒产区葡萄园中的索林风车，伯恩丘，勃艮第，法国 (© Marco Bottigelli/Getty Images)",
-      "bytes": 289854
-    },
-    {
-      "file": "scene-8.jpg",
-      "date": "20260915",
-      "credit": "斯瓦尔巴群岛玩耍的北极熊幼崽，挪威 (© Danny Green/Nature Picture Library)",
-      "bytes": 327941
-    }
-  ]
+  "note": "预置壁纸来源与授权。分两组：导航主题（20 张，Unsplash 高清原图 + 本项目统一设计语言重制）与自然风景（8 张，Bing 每日壁纸公开接口）。",
+  "nav": {
+    "group": "导航主题",
+    "source": "Unsplash（https://unsplash.com）",
+    "license": "Unsplash License — 可免费商用、无需署名（此处仍保留出处以示尊重）",
+    "fetched": "2026-09-23",
+    "size": "2560x1440（另有 480x270 的 .t.jpg 缩略图，仅供后台预览网格使用）",
+    "design": "底图经「轻度模糊 + 主题色归拢 + 磨砂柔化 + 细颗粒」处理，再叠加同一套导航线条图标语言：经纬网格、虚线路线与节点、玻璃卡主图标、图标簇（地图定位标记 / 地址标签 / 链接符号 / 指南针 / 路线 / 地球经纬 / 搜索 / 应用方格 / 导航箭头 / 分享节点 / 收藏书签 / 目的地旗帜 / 图层堆叠 / 扫码框）。20 张共用图标语言与网格，版式与配色轮换。",
+    "items": [
+      { "file": "nav-01.jpg", "name": "白绢微光", "op": "pin",      "url": "https://unsplash.com/photos/4b4a1ae0f04d" },
+      { "file": "nav-02.jpg", "name": "晨雾远山", "op": "cross",    "url": "https://unsplash.com/photos/a25ddb2bd429" },
+      { "file": "nav-03.jpg", "name": "玻璃几何", "op": "layers",   "url": "https://unsplash.com/photos/f43a02bfa064" },
+      { "file": "nav-04.jpg", "name": "蓝玻璃",   "op": "globe",    "url": "https://unsplash.com/photos/d379bfcba9f8" },
+      { "file": "nav-05.jpg", "name": "蓝紫流体", "op": "route",    "url": "https://unsplash.com/photos/a6a128ef0d9d" },
+      { "file": "nav-06.jpg", "name": "靛蓝波纹", "op": "link",     "url": "https://unsplash.com/photos/d088224ddc74" },
+      { "file": "nav-07.jpg", "name": "紫晶方块", "op": "grid",     "url": "https://unsplash.com/photos/d516dce335e2" },
+      { "file": "nav-08.jpg", "name": "柔光球体", "op": "compass",  "url": "https://unsplash.com/photos/d3d4b5a92ead" },
+      { "file": "nav-09.jpg", "name": "虹波",     "op": "arrow",    "url": "https://unsplash.com/photos/d5da9d8e45f3" },
+      { "file": "nav-10.jpg", "name": "彩浪",     "op": "share",    "url": "https://unsplash.com/photos/a83a8bd57fbe" },
+      { "file": "nav-11.jpg", "name": "霞光渐变", "op": "scan",     "url": "https://unsplash.com/photos/9e396f3cc809" },
+      { "file": "nav-12.jpg", "name": "紫蓝暮色", "op": "bookmark", "url": "https://unsplash.com/photos/33bd709cbe85" },
+      { "file": "nav-13.jpg", "name": "暖霞云",   "op": "flag",     "url": "https://unsplash.com/photos/9fdd9a71ad75" },
+      { "file": "nav-14.jpg", "name": "粉彩云",   "op": "tag",      "url": "https://unsplash.com/photos/c942862f0372" },
+      { "file": "nav-15.jpg", "name": "粉绿撞色", "op": "tag",      "url": "https://unsplash.com/photos/a47ad25cb82a" },
+      { "file": "nav-16.jpg", "name": "桃粉光晕", "op": "cross",    "url": "https://unsplash.com/photos/52ab5629fba9" },
+      { "file": "nav-17.jpg", "name": "粉蓝云石", "op": "compass",  "url": "https://unsplash.com/photos/298e090bd0f1" },
+      { "file": "nav-18.jpg", "name": "玄黑织物", "op": "pin",      "url": "https://unsplash.com/photos/efcbd6e3f031" },
+      { "file": "nav-19.jpg", "name": "洋红暗流", "op": "route",    "url": "https://unsplash.com/photos/7a1c342ea42e" },
+      { "file": "nav-20.jpg", "name": "暗夜窗光", "op": "globe",    "url": "https://unsplash.com/photos/7852f32655ec" }
+    ]
+  },
+  "scene": {
+    "group": "自然风景",
+    "source": "Bing 每日壁纸公开接口（cn.bing.com/HPImageArchive）",
+    "license": "版权归原作者所有，仅供个人导航站背景使用",
+    "items": [
+      { "file": "scene-1.jpg", "date": "20260922", "credit": "地坛公园秋日美景，北京，中国 (© by Wei/Adobestock)" },
+      { "file": "scene-2.jpg", "date": "20260921", "credit": "瓜兹曼山口附近的秋日山杨林，犹他州，美国 (© Danita Delimont/Shutterstock)" },
+      { "file": "scene-3.jpg", "date": "20260920", "credit": "正在梳理皮毛的海獭，蒙特雷湾，加利福尼亚州，美国 (© Suzi Eszterhas/Minden Pictures)" },
+      { "file": "scene-4.jpg", "date": "20260919", "credit": "日落时分的埃菲尔铁塔，巴黎，法国 (© Alexander Spatari/Getty Images)" },
+      { "file": "scene-5.jpg", "date": "20260918", "credit": "阿尔卑斯长号演奏者，巴伐利亚州，德国 (© U. J. Alexander/Shutterstock)" },
+      { "file": "scene-6.jpg", "date": "20260917", "credit": "温纳茨山口，峰区国家公园，英格兰 (© Daniel_Kay/Getty Images)" },
+      { "file": "scene-7.jpg", "date": "20260916", "credit": "桑特奈葡萄酒产区葡萄园中的索林风车，伯恩丘，勃艮第，法国 (© Marco Bottigelli/Getty Images)" },
+      { "file": "scene-8.jpg", "date": "20260915", "credit": "斯瓦尔巴群岛玩耍的北极熊幼崽，挪威 (© Danny Green/Nature Picture Library)" }
+    ]
+  }
 }

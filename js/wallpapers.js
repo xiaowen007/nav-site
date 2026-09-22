@@ -12,6 +12,9 @@
  *   value   写入 site.wallpaperValue 的字符串
  *           css → 直接是 CSS 背景值（可多层，逗号分隔）
  *           img → 资源路径（本地 assets/wallpapers/ 下的文件）
+ *   thumb   仅 img 用：后台网格显示的小图（不填就退回 value）。
+ *           导航主题那 20 张主图是 2560x1440、单张 300KB+，
+ *           后台一屏 20 格全加载原图会明显卡顿，所以另出一份 480x270 小图。
  *   type    写入 site.wallpaperType（css 走 'gradient'，img 走 'image'）
  *   opacity 推荐遮罩透明度（磨砂感的关键，比站点默认 0.08 重）
  *   blur    推荐模糊半径 px
@@ -42,6 +45,74 @@
   /* 柔光斑渐变：几个不同色相的 radial-gradient 各自弥散 + 一层同色系
      斜向线性渐变打底。就是「磨砂玻璃后面透出来的光」那种感觉。 */
   var list = [
+    /* ---------- 导航主题（20 张高清图，成套设计）----------
+       来源：全网抓取的高清原图（Unsplash，见 assets/wallpapers/CREDITS.json），
+       再用同一套设计语言重制：磨砂柔化底 + 细颗粒 + 经纬网 + 虚线路线 +
+       玻璃卡里的主图标 + 图标簇（地图定位标记 / 地址标签 / 链接符号 / 指南针 /
+       路线 / 地球经纬 / 搜索 / 应用方格 / 导航箭头 / 分享节点 …）。
+       20 张共用图标语言与网格，只有版式与配色轮换，所以是一整套而不是 20 张散图。
+       thumb 是后台网格用的小图（480x270，约 10KB），不加载 2.5K 原图，后台才不卡。 */
+    { id: 'wp:nav-01', name: '白绢微光', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-01.jpg', thumb: 'assets/wallpapers/nav-01.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-02', name: '晨雾远山', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-02.jpg', thumb: 'assets/wallpapers/nav-02.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-03', name: '玻璃几何', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-03.jpg', thumb: 'assets/wallpapers/nav-03.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-04', name: '蓝玻璃', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-04.jpg', thumb: 'assets/wallpapers/nav-04.t.jpg',
+      opacity: 0.2, blur: 0 },
+    { id: 'wp:nav-05', name: '蓝紫流体', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-05.jpg', thumb: 'assets/wallpapers/nav-05.t.jpg',
+      opacity: 0.2, blur: 0 },
+    { id: 'wp:nav-06', name: '靛蓝波纹', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-06.jpg', thumb: 'assets/wallpapers/nav-06.t.jpg',
+      opacity: 0.2, blur: 0 },
+    { id: 'wp:nav-07', name: '紫晶方块', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-07.jpg', thumb: 'assets/wallpapers/nav-07.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-08', name: '柔光球体', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-08.jpg', thumb: 'assets/wallpapers/nav-08.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-09', name: '虹波', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-09.jpg', thumb: 'assets/wallpapers/nav-09.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-10', name: '彩浪', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-10.jpg', thumb: 'assets/wallpapers/nav-10.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-11', name: '霞光渐变', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-11.jpg', thumb: 'assets/wallpapers/nav-11.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-12', name: '紫蓝暮色', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-12.jpg', thumb: 'assets/wallpapers/nav-12.t.jpg',
+      opacity: 0.2, blur: 0 },
+    { id: 'wp:nav-13', name: '暖霞云', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-13.jpg', thumb: 'assets/wallpapers/nav-13.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-14', name: '粉彩云', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-14.jpg', thumb: 'assets/wallpapers/nav-14.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-15', name: '粉绿撞色', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-15.jpg', thumb: 'assets/wallpapers/nav-15.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-16', name: '桃粉光晕', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-16.jpg', thumb: 'assets/wallpapers/nav-16.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-17', name: '粉蓝云石', kind: 'img', group: 'nav',
+      value: 'assets/wallpapers/nav-17.jpg', thumb: 'assets/wallpapers/nav-17.t.jpg',
+      opacity: 0.14, blur: 0 },
+    { id: 'wp:nav-18', name: '玄黑织物', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-18.jpg', thumb: 'assets/wallpapers/nav-18.t.jpg',
+      opacity: 0.2, blur: 0 },
+    { id: 'wp:nav-19', name: '洋红暗流', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-19.jpg', thumb: 'assets/wallpapers/nav-19.t.jpg',
+      opacity: 0.2, blur: 0 },
+    { id: 'wp:nav-20', name: '暗夜窗光', kind: 'img', group: 'nav', dark: true,
+      value: 'assets/wallpapers/nav-20.jpg', thumb: 'assets/wallpapers/nav-20.t.jpg',
+      opacity: 0.2, blur: 0 },
+
     /* ---------- 磨砂玻璃（渐变 + 噪点颗粒）：最贴近「磨砂透明」----------
        配色经验：第一版用了 #dbeafe / #ede9fe 这类**极浅色**做光斑，
        再叠上 0.34 的白色遮罩，主页上几乎就是一片纯白 ——
@@ -162,6 +233,7 @@
   ];
 
   var groups = [
+    { id: 'nav', name: '导航主题', hint: '20 张高清成套壁纸：磨砂透明底 + 定位标记/地址标签/链接等线条图标' },
     { id: 'frost', name: '磨砂玻璃', hint: '渐变 + 噪点颗粒，最接近真实磨砂质感' },
     { id: 'soft', name: '柔光弥散', hint: '纯渐变、零体积，最轻量' },
     { id: 'plain', name: '纯净单色', hint: '不抢卡片注意力' },
@@ -169,7 +241,7 @@
   ];
 
   var byValue = {};
-  /* type 由 kind 推导，不手写：26 项手写一遍迟早写漏一个，
+  /* type 由 kind 推导，不手写：46 项手写一遍迟早写漏一个，
      而漏掉的那项会被前台当成 image 去包 url()，渐变就渲染不出来了。
      （后台点选时是拿 item.type 去写 wallpaperType 的，必须每项都有。） */
   list.forEach(function (it) {
