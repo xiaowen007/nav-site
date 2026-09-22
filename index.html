@@ -4,15 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230045" />
+  <link rel="stylesheet" href="css/style.css?v=202609230111" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
   <header class="topbar">
     <button class="menu-toggle" id="menuToggle" aria-label="切换导航">☰</button>
-    <!-- 站点名称 + 站点描述：原先在正文中间单独占一块（.hero），现移到顶栏左上角。
-         两行文字各自的字号由后台「首页设置 → 字体」里的两个滑块控制
-         （--title-size / --subtitle-size），所以这里不用写死 font-size。 -->
+    <!-- 顶栏左上角的站点名称 + 站点描述：与正文中间的 .hero（主页中心模块）
+         是两套独立内容，文字与字号都在后台「首页设置」里分开设置。
+         两行文字各自的字号由两个滑块控制（--title-size / --subtitle-size），
+         所以这里不用写死 font-size。 -->
     <div class="brand">
       <span id="siteLogo">🌐</span>
       <span class="brand-text">
@@ -80,8 +81,14 @@
 
     <!-- 主内容区 -->
     <main class="content" id="content">
-      <!-- 站点名称 / 描述已于 2026-09-23 移到顶栏左上角（.brand），
-           正文不再有 .hero 区块，分类区块直接顶到内容区顶部。 -->
+      <!-- 主页中心模块：站点名称（大标题）+ 站点描述（副标题）。
+           与顶栏左上角那份是**两套独立内容** —— 文字与字号都在后台
+           「首页设置」里分开设置（中心名称/描述留空时回落到站点名称/描述，
+           所以默认看起来与顶栏一致）。字号走 --hero-title-size / --hero-sub-size。 -->
+      <section class="hero" id="hero">
+        <h1 id="heroTitle">共享导航</h1>
+        <p id="heroSub">智能多功能响应式导航</p>
+      </section>
       <div id="sections"><!-- 分类区块由 JS 注入 --></div>
       <footer class="footer" id="footer"></footer>
     </main>
@@ -166,7 +173,7 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202609230045"></script>
-  <script src="js/app.js?v=202609230045"></script>
+  <script src="js/lunar.js?v=202609230111"></script>
+  <script src="js/app.js?v=202609230111"></script>
 </body>
 </html>

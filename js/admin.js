@@ -1212,6 +1212,10 @@
     $('#setTitle').value = s.title || '';
     $('#setSubtitle').value = s.subtitle || '';
     $('#setFooter').value = s.footer || '';
+    // 主页中心模块（正文顶部大标题）：与顶栏那份独立。空值 = 沿用站点名称 / 站点描述，
+    // 所以回填时保持空字符串，不要把回落后的值写进输入框（否则用户一保存就被固化了）。
+    $('#setHeroTitle').value = s.heroTitle || '';
+    $('#setHeroSub').value = s.heroSub || '';
 
     ['searchPosition', 'categoryPosition', 'categoryArrangement', 'wallpaperType'].forEach((k) => {
       // 壁纸类型为空时默认高亮「无」，避免类型按钮全灭导致类型与壁纸值不同步
@@ -1255,6 +1259,13 @@
     $('#setTitleSizeVal').textContent = (s.titleSize || 18) + 'px';
     $('#setSubtitleSize').value = s.subtitleSize || 12;
     $('#setSubtitleSizeVal').textContent = (s.subtitleSize || 12) + 'px';
+    // 主页中心模块「中心名称 / 中心描述」的独立字号（同 :root 默认 24px / 14px）。
+    // ⚠️ 必须显式回填：range 滑块在只有 min/max 没有 value 时，浏览器默认落在**量程中点**
+    // （中心名称 12~48 → 30），不改的话后台一进来就显示 30px，与页面实际的 24px 不符。
+    $('#setHeroTitleSize').value = s.heroTitleSize || 24;
+    $('#setHeroTitleSizeVal').textContent = (s.heroTitleSize || 24) + 'px';
+    $('#setHeroSubSize').value = s.heroSubSize || 14;
+    $('#setHeroSubSizeVal').textContent = (s.heroSubSize || 14) + 'px';
     syncFontOptions();
     renderFonts();
 
@@ -1464,6 +1475,12 @@
     s.title = $('#setTitle').value.trim();
     s.subtitle = $('#setSubtitle').value.trim();
     s.footer = $('#setFooter').value.trim();
+    // 主页中心模块的文字：留空就删掉字段（前台 renderHead 会自动回落到 title / subtitle），
+    // 而不是存一个空串 —— 空串虽然结果一样，但导出 / 迁移时看起来像"设了个空标题"。
+    const hTitle = $('#setHeroTitle').value.trim();
+    const hSub = $('#setHeroSub').value.trim();
+    if (hTitle) s.heroTitle = hTitle; else delete s.heroTitle;
+    if (hSub) s.heroSub = hSub; else delete s.heroSub;
     s.defaultCategory = $('#setDefaultCategory').value;
     s.rememberCategory = $('#setRememberCategory').checked;
     s.showFavorites = $('#setShowFavorites').checked;
@@ -1488,6 +1505,9 @@
     // 顶栏站名 / 描述各自的字号（前台 applyTypography 写到 --title-size / --subtitle-size）
     s.titleSize = +$('#setTitleSize').value || 18;
     s.subtitleSize = +$('#setSubtitleSize').value || 12;
+    // 主页中心模块的两个字号（前台写到 --hero-title-size / --hero-sub-size）
+    s.heroTitleSize = +$('#setHeroTitleSize').value || 24;
+    s.heroSubSize = +$('#setHeroSubSize').value || 14;
     s.fontFamily = $('#setFontFamily').value;
     return s;
   }
@@ -1539,9 +1559,12 @@
 
     // 字体：实时显示数值
     $('#setFontSize').addEventListener('input', (e) => { $('#setFontSizeVal').textContent = e.target.value + 'px'; });
-    // 站点名称 / 描述字号：拖动即时更新数值标签（左侧预览由侧栏统一的 input 监听节流推送）
+    // 顶栏 / 中心四个字号滑块：拖动即时更新数值标签
+    // （左侧预览由侧栏统一的 input 监听节流推送）
     $('#setTitleSize').addEventListener('input', (e) => { $('#setTitleSizeVal').textContent = e.target.value + 'px'; });
     $('#setSubtitleSize').addEventListener('input', (e) => { $('#setSubtitleSizeVal').textContent = e.target.value + 'px'; });
+    $('#setHeroTitleSize').addEventListener('input', (e) => { $('#setHeroTitleSizeVal').textContent = e.target.value + 'px'; });
+    $('#setHeroSubSize').addEventListener('input', (e) => { $('#setHeroSubSizeVal').textContent = e.target.value + 'px'; });
 
     $('#addEngine').addEventListener('click', addEngine);
     $('#resetEngines').addEventListener('click', resetEngines);

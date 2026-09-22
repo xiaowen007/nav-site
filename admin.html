@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230045" />
+  <link rel="stylesheet" href="css/style.css?v=202609230111" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -711,12 +711,23 @@
           <section class="side-view on" data-view="home">
             <div class="settings-section">
               <h4>站点信息</h4>
-              <label class="hint">站点名称</label>
+              <!-- 顶栏（首页左上角）与中心（正文顶部大标题）是**两套独立内容**：
+                   文字分开填、字号分开调，谁都不影响谁。 -->
+              <label class="hint">站点名称（顶栏左上角）</label>
               <input type="text" id="setTitle" name="site-title" autocomplete="off" placeholder="请输入站点名称" />
-              <label class="hint">站点描述</label>
+              <label class="hint">站点描述（顶栏左上角）</label>
               <textarea id="setSubtitle" placeholder="请输入站点描述…"></textarea>
               <label class="hint">页脚描述</label>
               <input type="text" id="setFooter" name="site-footer" autocomplete="off" placeholder="页脚说明" />
+
+              <h5>主页中心模块（正文顶部大标题）</h5>
+              <label class="hint">中心名称（留空则沿用站点名称）</label>
+              <input type="text" id="setHeroTitle" name="site-hero-title" autocomplete="off" placeholder="留空则沿用站点名称" />
+              <label class="hint">中心描述（留空则沿用站点描述）</label>
+              <textarea id="setHeroSub" placeholder="留空则沿用站点描述…"></textarea>
+              <p class="settings-hint" style="margin-top:6px">
+                顶栏左上角与主页中心模块是两套独立文字：只改一边不影响另一边；留空即与顶栏保持一致。
+              </p>
 
               <h5>字体</h5>
               <div class="settings-row">
@@ -726,24 +737,40 @@
                   <span id="setFontSizeVal" class="hint">14px</span>
                 </div>
               </div>
-              <!-- 顶栏左上角的「站点名称 / 站点描述」各有独立字号滑块：
-                   两者作用在 --title-size / --subtitle-size 上，与上面的全局字号互不影响。 -->
+              <!-- 顶栏 / 中心各两个字号滑块，共四个，彼此完全独立：
+                   顶栏 → --title-size / --subtitle-size，中心 → --hero-title-size / --hero-sub-size，
+                   都与上面的全局字号互不影响。 -->
               <div class="settings-row">
-                <span class="srl">站点名称字号</span>
+                <span class="srl">顶栏名称字号</span>
                 <div class="sr-ctl">
                   <input type="range" id="setTitleSize" min="12" max="40" step="1" />
                   <span id="setTitleSizeVal" class="hint">18px</span>
                 </div>
               </div>
               <div class="settings-row">
-                <span class="srl">站点描述字号</span>
+                <span class="srl">顶栏描述字号</span>
                 <div class="sr-ctl">
                   <input type="range" id="setSubtitleSize" min="10" max="28" step="1" />
                   <span id="setSubtitleSizeVal" class="hint">12px</span>
                 </div>
               </div>
+              <div class="settings-row">
+                <span class="srl">中心名称字号</span>
+                <div class="sr-ctl">
+                  <input type="range" id="setHeroTitleSize" min="12" max="48" step="1" />
+                  <span id="setHeroTitleSizeVal" class="hint">24px</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <span class="srl">中心描述字号</span>
+                <div class="sr-ctl">
+                  <input type="range" id="setHeroSubSize" min="10" max="32" step="1" />
+                  <span id="setHeroSubSizeVal" class="hint">14px</span>
+                </div>
+              </div>
               <p class="settings-hint" style="margin-top:2px">
-                站点名称与描述显示在首页顶栏左上角，两个字号互相独立；调大后顶栏会跟着变高，左侧预览可实时查看。
+                顶部四个字号互相独立：<b>顶栏</b> = 首页左上角那一小块，调大后顶栏会跟着变高；
+                <b>中心</b> = 主页正文最上方的大标题。文字分别在上方「站点信息」里填，左侧预览可实时查看。
               </p>
               <div class="settings-row">
                 <span class="srl">字体</span>
@@ -1018,6 +1045,6 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/admin.js?v=202609230045"></script>
+  <script src="js/admin.js?v=202609230111"></script>
 </body>
 </html>

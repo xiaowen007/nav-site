@@ -226,8 +226,15 @@
       $('#siteTitle').textContent = s.title;
       document.title = s.title;
     }
-    // 站点描述现在显示在顶栏品牌块的第二行（原先在正文中间的 .hero 里）
+    // 站点描述显示在顶栏品牌块的第二行
     if (s.subtitle) $('#siteDesc').textContent = s.subtitle;
+    // 主页中心模块（正文顶部的 .hero）：与顶栏那份是**两套独立内容**。
+    // 中心名称 / 中心描述留空时回落到站点名称 / 站点描述 —— 默认两块一致，
+    // 只填一边就只改一边（这是"可分开设置文字"的交互约定）。
+    const heroT = s.heroTitle || s.title;
+    const heroS = s.heroSub || s.subtitle;
+    if (heroT) $('#heroTitle').textContent = heroT;
+    if (heroS) $('#heroSub').textContent = heroS;
     if (s.footer) $('#footer').textContent = s.footer;
     $('#sideFoot').textContent = (s.subtitle || '') + '\n数据：data/sites.json';
   }
@@ -508,6 +515,12 @@
     else root.style.removeProperty('--title-size');
     if (s.subtitleSize) root.style.setProperty('--subtitle-size', s.subtitleSize + 'px');
     else root.style.removeProperty('--subtitle-size');
+    // 主页中心模块「中心名称 / 中心描述」的独立字号（另两个滑块）。
+    // 与顶栏那对完全独立：这里写 --hero-* 变量，改不到顶栏。
+    if (s.heroTitleSize) root.style.setProperty('--hero-title-size', s.heroTitleSize + 'px');
+    else root.style.removeProperty('--hero-title-size');
+    if (s.heroSubSize) root.style.setProperty('--hero-sub-size', s.heroSubSize + 'px');
+    else root.style.removeProperty('--hero-sub-size');
 
     let stack = '';
     if (s.fontFamily && s.fontFamily !== 'default') {

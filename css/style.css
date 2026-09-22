@@ -13,10 +13,13 @@
   /* 可在后台「首页设置 → 字体」调整，由 JS 写入行内样式覆盖 */
   --font-size: 14px;
   /* 顶栏左上角「站点名称 / 站点描述」两个独立字号（各自一个滑块）。
-     与 --font-size（页面基准字号）分开：这里只作用于 .brand 里的两行文字。
-     2026-09-23 起名称与描述从正文中间的 .hero 搬到顶栏，故字号也一并独立出来。 */
+     与 --font-size（页面基准字号）分开：这里只作用于 .brand 里的两行文字。 */
   --title-size: 18px;
   --subtitle-size: 12px;
+  /* 主页中心模块（正文顶部的 .hero 大标题 + 副标题）的独立字号，同样各一个滑块。
+     与顶栏那两个分开：改这里不会动顶栏，改顶栏也不会动中心。 */
+  --hero-title-size: 24px;
+  --hero-sub-size: 14px;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
   /* 开启壁纸时顶栏 / 侧栏改用半透明面板，让壁纸能全屏透出（不透明面板会挡住壁纸） */
@@ -266,9 +269,14 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
   padding: 22px 26px 40px;
 }
-/* 原 `.hero`（正文中间的站点名称 + 描述）已随 2026-09-23 改版搬进顶栏 .brand，
-   这里不再保留占位规则 —— 若日后要恢复中间大标题，记得同时把 app.js 的
-   #heroTitle / #heroSub 赋值一起加回来。 */
+/* 主页中心模块：站点名称（大标题）+ 站点描述（副标题），位于正文最上方。
+   ⚠️ 2026-09-23 当天曾把这块整体搬进顶栏、删掉 .hero；同日应需求**恢复为两块并存**：
+   顶栏一份、中心一份，文字与字号完全独立（后台分开设置），谁都不影响谁。
+   字号只用变量、不在任何 @media 里再写死 —— 否则滑块调大后在窄屏会被断点压回去，
+   表现为"后台改了字没变大"，非常难查。 */
+.hero { margin-bottom: 18px; }
+.hero h1 { margin: 0 0 4px; font-size: var(--hero-title-size); }
+.hero p { margin: 0; color: var(--muted); font-size: var(--hero-sub-size); }
 
 .section { margin-bottom: 30px; scroll-margin-top: calc(var(--top-h) + 12px); }
 .section-head {
@@ -662,6 +670,12 @@ body.wallpaper::after {
   .theme-toggle { width: 34px; height: 34px; font-size: 15px; }
   .admin-link { padding: 6px 10px; font-size: 12px; }
   .al-txt { display: none; }
+
+  /* 手机：中心模块居中（与改版前一致）。
+     ⚠️ 只恢复居中，**不要再写 font-size** —— 中心字号由后台滑块控制，
+     这里若降档，用户把中心名称拖到 40px 后在手机上会被压回 20px，
+     表现为「后台改了字没变大」，是极难查的一类问题。 */
+  .hero { text-align: center; }
 
   .content { padding: 14px 12px 30px; }
 
