@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230022" />
+  <link rel="stylesheet" href="css/style.css?v=202609230045" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -720,12 +720,31 @@
 
               <h5>字体</h5>
               <div class="settings-row">
-                <span class="srl">字体大小</span>
+                <span class="srl">全局字号</span>
                 <div class="sr-ctl">
                   <input type="range" id="setFontSize" min="12" max="40" step="1" />
                   <span id="setFontSizeVal" class="hint">14px</span>
                 </div>
               </div>
+              <!-- 顶栏左上角的「站点名称 / 站点描述」各有独立字号滑块：
+                   两者作用在 --title-size / --subtitle-size 上，与上面的全局字号互不影响。 -->
+              <div class="settings-row">
+                <span class="srl">站点名称字号</span>
+                <div class="sr-ctl">
+                  <input type="range" id="setTitleSize" min="12" max="40" step="1" />
+                  <span id="setTitleSizeVal" class="hint">18px</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <span class="srl">站点描述字号</span>
+                <div class="sr-ctl">
+                  <input type="range" id="setSubtitleSize" min="10" max="28" step="1" />
+                  <span id="setSubtitleSizeVal" class="hint">12px</span>
+                </div>
+              </div>
+              <p class="settings-hint" style="margin-top:2px">
+                站点名称与描述显示在首页顶栏左上角，两个字号互相独立；调大后顶栏会跟着变高，左侧预览可实时查看。
+              </p>
               <div class="settings-row">
                 <span class="srl">字体</span>
                 <select id="setFontFamily"><!-- 选项由 JS 生成：内置预设 + 自定义字体 --></select>
@@ -999,6 +1018,6 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/admin.js?v=202609230022"></script>
+  <script src="js/admin.js?v=202609230045"></script>
 </body>
 </html>

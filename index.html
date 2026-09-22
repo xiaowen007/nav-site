@@ -4,13 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202609230022" />
+  <link rel="stylesheet" href="css/style.css?v=202609230045" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
   <header class="topbar">
     <button class="menu-toggle" id="menuToggle" aria-label="切换导航">☰</button>
-    <div class="brand"><span id="siteLogo">🌐</span><span id="siteTitle">共享导航</span></div>
+    <!-- 站点名称 + 站点描述：原先在正文中间单独占一块（.hero），现移到顶栏左上角。
+         两行文字各自的字号由后台「首页设置 → 字体」里的两个滑块控制
+         （--title-size / --subtitle-size），所以这里不用写死 font-size。 -->
+    <div class="brand">
+      <span id="siteLogo">🌐</span>
+      <span class="brand-text">
+        <span id="siteTitle">共享导航</span>
+        <span id="siteDesc">智能多功能响应式导航</span>
+      </span>
+    </div>
 
     <div class="tb-searches">
       <!-- 搜索引擎网页搜索 -->
@@ -71,10 +80,8 @@
 
     <!-- 主内容区 -->
     <main class="content" id="content">
-      <section class="hero" id="hero">
-        <h1 id="heroTitle">共享导航</h1>
-        <p id="heroSub">智能多功能响应式导航</p>
-      </section>
+      <!-- 站点名称 / 描述已于 2026-09-23 移到顶栏左上角（.brand），
+           正文不再有 .hero 区块，分类区块直接顶到内容区顶部。 -->
       <div id="sections"><!-- 分类区块由 JS 注入 --></div>
       <footer class="footer" id="footer"></footer>
     </main>
@@ -159,7 +166,7 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202609230022"></script>
-  <script src="js/app.js?v=202609230022"></script>
+  <script src="js/lunar.js?v=202609230045"></script>
+  <script src="js/app.js?v=202609230045"></script>
 </body>
 </html>

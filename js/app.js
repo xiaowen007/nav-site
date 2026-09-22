@@ -225,11 +225,31 @@
     if (s.title) {
       $('#siteTitle').textContent = s.title;
       document.title = s.title;
-      $('#heroTitle').textContent = s.title;
     }
-    if (s.subtitle) $('#heroSub').textContent = s.subtitle;
+    // 站点描述现在显示在顶栏品牌块的第二行（原先在正文中间的 .hero 里）
+    if (s.subtitle) $('#siteDesc').textContent = s.subtitle;
     if (s.footer) $('#footer').textContent = s.footer;
     $('#sideFoot').textContent = (s.subtitle || '') + '\n数据：data/sites.json';
+  }
+
+  /* 顶栏高度是动态的：站点名称 / 描述的字号可在后台调大，顶栏会跟着变高，
+     而侧栏 sticky top、锚点 scroll-margin 都按 --top-h 算 —— 不回写就会出现
+     「侧栏顶部被变高的顶栏压住」。这里量一次实测高度写回变量即可。
+     jsdom 下 getBoundingClientRect 恒为 0，用 > 0 兜住，避免把 --top-h 写成 0。 */
+  function syncTopHeight() {
+    const tb = document.querySelector('.topbar');
+    if (!tb) return;
+    const root = document.documentElement;
+    // 必须先摘掉行内值再量：.topbar 有 min-height: var(--top-h)，
+    // 留着上次写的值就形成"棘轮" —— 窗口从窄变宽时顶栏永远回不到矮的那一档。
+    root.style.removeProperty('--top-h');
+    const h = Math.round(tb.getBoundingClientRect().height);
+    if (h > 0) root.style.setProperty('--top-h', h + 'px');
+  }
+  function scheduleSyncTopHeight() {
+    const run = () => { try { syncTopHeight(); } catch (e) {} };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else run();
   }
 
   /* ---------- 分类层级（支持 1~3 级） ---------- */
@@ -483,6 +503,11 @@
     const s = state.data.site || {};
     const root = document.documentElement;
     if (s.fontSize) root.style.setProperty('--font-size', s.fontSize + 'px');
+    // 顶栏「站点名称 / 站点描述」的独立字号（后台两个滑块）。未设置时回退 :root 默认值。
+    if (s.titleSize) root.style.setProperty('--title-size', s.titleSize + 'px');
+    else root.style.removeProperty('--title-size');
+    if (s.subtitleSize) root.style.setProperty('--subtitle-size', s.subtitleSize + 'px');
+    else root.style.removeProperty('--subtitle-size');
 
     let stack = '';
     if (s.fontFamily && s.fontFamily !== 'default') {
@@ -550,6 +575,8 @@
     }
     // 字体
     applyTypography();
+    // 字号变了顶栏高度也会变，量一次回写 --top-h（侧栏 sticky / 锚点偏移都依赖它）
+    scheduleSyncTopHeight();
     // 壁纸
     applyWallpaper();
     // 默认 / 记住分类
@@ -1234,6 +1261,12 @@
     initCalendar();
     // 定时自动刷新：跨天翻页 + 天气定时更新（页面长期挂着不刷新也能自动走）
     startAutoRefresh();
+    // 视口变化会让顶栏换行 / 站名描述重新排布，高度要跟着重算
+    window.addEventListener('resize', scheduleSyncTopHeight);
+    // 自定义字体加载完成后文字尺寸会跳一下，再量一次更稳
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+      document.fonts.ready.then(scheduleSyncTopHeight).catch(() => {});
+    }
   }
 
   /* ===== 天气模块（主页左上角） ===== */

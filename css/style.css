@@ -12,6 +12,11 @@
   --top-h: 60px;   /* 顶栏高度（含搜索引擎搜索框）：侧栏 / 锚点偏移都基于它 */
   /* 可在后台「首页设置 → 字体」调整，由 JS 写入行内样式覆盖 */
   --font-size: 14px;
+  /* 顶栏左上角「站点名称 / 站点描述」两个独立字号（各自一个滑块）。
+     与 --font-size（页面基准字号）分开：这里只作用于 .brand 里的两行文字。
+     2026-09-23 起名称与描述从正文中间的 .hero 搬到顶栏，故字号也一并独立出来。 */
+  --title-size: 18px;
+  --subtitle-size: 12px;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
   /* 开启壁纸时顶栏 / 侧栏改用半透明面板，让壁纸能全屏透出（不透明面板会挡住壁纸） */
@@ -87,15 +92,35 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 1px solid var(--glass-brd-soft);
   box-shadow: var(--glass-shadow);
 }
+/* 顶栏左上角品牌块：站点名称（上）+ 站点描述（下），两行字号各自独立可调。
+   注意 .brand 本身不要再写 font-size —— 会同时影响两行，让两个滑块互相打架。
+   顶栏高度因此会随字号变化，app.js 的 syncTopHeight() 会把实测高度回写给
+   --top-h（侧栏 sticky top 与锚点 scroll-margin 都依赖它）。 */
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 17px;
-  white-space: nowrap;
+  gap: 9px;
+  min-width: 0;
 }
-.brand #siteLogo { font-size: 20px; }
+/* 图标跟着「站点名称字号」一起缩放：否则把名称拖到 40px 时，固定 22px 的
+   emoji 会显得极小、比例失衡。默认 18px × 1.2 ≈ 21.6px，与改版前基本一致。 */
+.brand #siteLogo { font-size: calc(var(--title-size) * 1.2); line-height: 1; }
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.brand #siteTitle {
+  font-weight: 700;
+  font-size: var(--title-size);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.brand #siteDesc {
+  color: var(--muted);
+  font-size: var(--subtitle-size);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* 顶栏搜索区：网页搜索（左） + 站内站点搜索（右）；窄屏整体换到第二行 */
 .tb-searches {
   display: flex;
@@ -241,9 +266,9 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
   padding: 22px 26px 40px;
 }
-.hero { margin-bottom: 18px; }
-.hero h1 { margin: 0 0 4px; font-size: 24px; }
-.hero p { margin: 0; color: var(--muted); }
+/* 原 `.hero`（正文中间的站点名称 + 描述）已随 2026-09-23 改版搬进顶栏 .brand，
+   这里不再保留占位规则 —— 若日后要恢复中间大标题，记得同时把 app.js 的
+   #heroTitle / #heroSub 赋值一起加回来。 */
 
 .section { margin-bottom: 30px; scroll-margin-top: calc(var(--top-h) + 12px); }
 .section-head {
@@ -612,7 +637,6 @@ body.wallpaper::after {
   .cards.cols-4, .cards.cols-5, .cards.cols-6 {
     grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--card-scale)), 1fr));
   }
-  .hero h1 { font-size: 22px; }
   /* 平板：顶栏收窄两个搜索框，按钮只留图标 */
   .ws-wrap { flex: 1 1 220px; max-width: 320px; }
   .search-box { flex: 0 1 160px; max-width: 190px; }
@@ -625,9 +649,11 @@ body.wallpaper::after {
   /* 顶栏两行：第一行品牌 + 主题 + 收录，第二行网页搜索 + 站内搜索 */
   :root { --top-h: 104px; }
   .topbar { gap: 8px; padding: 8px 12px; }
-  .brand { font-size: 15px; gap: 6px; min-width: 0; }
-  .brand #siteLogo { font-size: 18px; }
-  #siteTitle { overflow: hidden; text-overflow: ellipsis; }
+  /* 站名 / 描述字号由后台滑块控制，这里不再降档 —— 用户设了多大就是多大，
+     只保证不撑破顶栏：超出部分走省略号（见上面 .brand #siteTitle 的 overflow）。
+     图标也不再单独降档，它按 --title-size 等比缩放（见 .brand #siteLogo）。 */
+  .brand { gap: 6px; min-width: 0; }
+  /* 省略号已由 .brand #siteTitle 统一提供，这里不再重复声明 */
   .tb-searches { flex: 1 1 100%; order: 10; gap: 8px; }
   .ws-wrap { flex: 1 1 auto; max-width: none; }
   .search-box { flex: 1 1 auto; max-width: none; min-width: 0; }
@@ -638,9 +664,6 @@ body.wallpaper::after {
   .al-txt { display: none; }
 
   .content { padding: 14px 12px 30px; }
-  .hero { text-align: center; }
-  .hero h1 { font-size: 20px; }
-  .hero p { font-size: 13px; }
 
   .ws-input-wrap { padding: 0 10px; }
   .tb-searches .ws-input-wrap input { height: 36px; font-size: 16px; } /* 16px 防 iOS 聚焦缩放 */
@@ -670,7 +693,11 @@ body.wallpaper::after {
 
 /* 小屏手机（≤400px）：进一步收敛，保证双列卡片与顶栏不溢出 */
 @media (max-width: 400px) {
-  #siteTitle { display: none; }
+  /* 顶栏极窄时收起「站点描述」，保住「站点名称」本身。
+     2026-09-23 之前这里藏的是 #siteTitle —— 那时名称只是顶栏一行小字、描述在
+     正文中间，藏名称无伤大雅；现在名称与描述都在顶栏（见 .brand），
+     再藏名称就等于把品牌整个抹掉，所以改成让次要的描述先让位。 */
+  #siteDesc { display: none; }
   .cards { grid-template-columns: 1fr 1fr; }
   .cards.cols-2, .cards.cols-3, .cards.cols-4, .cards.cols-5, .cards.cols-6 {
     grid-template-columns: 1fr 1fr;

@@ -1250,6 +1250,11 @@
     // 字体（内置预设 + 自定义字体列表）
     $('#setFontSize').value = s.fontSize || 14;
     $('#setFontSizeVal').textContent = (s.fontSize || 14) + 'px';
+    // 顶栏「站点名称 / 站点描述」的独立字号（默认值与 css/style.css 的 :root 保持一致）
+    $('#setTitleSize').value = s.titleSize || 18;
+    $('#setTitleSizeVal').textContent = (s.titleSize || 18) + 'px';
+    $('#setSubtitleSize').value = s.subtitleSize || 12;
+    $('#setSubtitleSizeVal').textContent = (s.subtitleSize || 12) + 'px';
     syncFontOptions();
     renderFonts();
 
@@ -1480,6 +1485,9 @@
     s.wallpaperBlur = +$('#setWallpaperBlur').value;
     // 字体
     s.fontSize = +$('#setFontSize').value || 14;
+    // 顶栏站名 / 描述各自的字号（前台 applyTypography 写到 --title-size / --subtitle-size）
+    s.titleSize = +$('#setTitleSize').value || 18;
+    s.subtitleSize = +$('#setSubtitleSize').value || 12;
     s.fontFamily = $('#setFontFamily').value;
     return s;
   }
@@ -1531,6 +1539,9 @@
 
     // 字体：实时显示数值
     $('#setFontSize').addEventListener('input', (e) => { $('#setFontSizeVal').textContent = e.target.value + 'px'; });
+    // 站点名称 / 描述字号：拖动即时更新数值标签（左侧预览由侧栏统一的 input 监听节流推送）
+    $('#setTitleSize').addEventListener('input', (e) => { $('#setTitleSizeVal').textContent = e.target.value + 'px'; });
+    $('#setSubtitleSize').addEventListener('input', (e) => { $('#setSubtitleSizeVal').textContent = e.target.value + 'px'; });
 
     $('#addEngine').addEventListener('click', addEngine);
     $('#resetEngines').addEventListener('click', resetEngines);
