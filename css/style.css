@@ -248,7 +248,9 @@ a { color: inherit; text-decoration: none; }
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border-right: 1px solid var(--glass-brd-soft);
   overflow-y: auto;
-  padding: 14px 10px;
+  /* 底部不留内边距：侧栏最后一个元素是吸底的 .side-foot，底部留白交给它自己，
+     否则吸底条下方会漏出 14px 侧栏背景、露出半个分类，像没贴到底。 */
+  padding: 14px 10px 0;
 }
 .side-nav { display: flex; flex-direction: column; gap: 2px; }
 .side-item {
@@ -267,12 +269,42 @@ a { color: inherit; text-decoration: none; }
 }
 .side-item:hover { background: var(--glass-hover); }
 .side-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+/* 侧栏底部说明（页面左下角）：站点副标题 + 数据来源 + 版本号。
+ * ⚠️ 这三行由 JS 逐行插入 <div>（见 app.js 的 renderSideFoot），不要再改成
+ *    textContent + '\n' —— 那在 HTML 里是**无效**的：默认 white-space 会把
+ *    换行折成空格，行能不能分开全看宽度巧合（窄了碰巧折行、宽了挤成一坨）。
+ * 版本号行 .sf-ver 的字号与上面两行**严格一致**（同为 12px）：
+ *    它只是脚注，不该比导航说明更抢眼；靠浅一点的透明度和上间距做层次，
+ *    不用另设字号（另设字号会让它在真机上看着"跟旁边不是一套字"）。 */
 .side-foot {
-  margin-top: 14px;
-  padding: 10px 12px;
+  /* 贴住侧栏可视区的底部：分类少时它就静静待在最下面（与从前一致），
+     分类多、侧栏要滚动时它会**吸底常驻**，不会被滚出屏幕 ——
+     左下角那行版本号必须扫一眼就看得到，藏在滚动区外等于没加
+     （真机实测：默认 seed 数据的 26 个分类就把侧栏撑到 1491px，
+      版本号落在视口外，1024 高度下根本看不见）。 */
+  position: sticky;
+  bottom: 0;
+  /* 左右负 margin 抵消侧栏自身的 10px 内边距 → 吸底条**通栏**铺满整个侧栏宽度；
+     padding 左侧 22px = 10(侧栏) - 10(负 margin) + 22，与上面分类项的文字左边界对齐。 */
+  margin: 14px -10px 0;
+  padding: 10px 22px 16px;
   font-size: 12px;
+  line-height: 1.55;
   color: var(--muted);
   border-top: 1px solid var(--glass-brd-soft);
+  /* 吸底时下方会有分类项从底下滚过，这里必须有**实色**底把它挡住。
+     ⚠️ 别想着"侧栏是毛玻璃，这里也来一层 glass"：侧栏自己是 backdrop-filter
+        元素，后代再写 backdrop-filter 不会对侧栏背后的内容生效 —— 实测结果是
+        半透明（--glass-1 只有 .58 白）背后分类的文字清清楚楚地叠在版本号上，
+        看着像重影。所以直接用不透明的面板色（浅色 #fff / 深色 #1a212b，
+        两套主题都跟随）。 */
+  background: var(--panel);
+}
+.side-foot .sf-ver {
+  margin-top: 5px;
+  font-size: 12px;
+  opacity: .88;
+  cursor: help;
 }
 .sidebar-mask {
   display: none;

@@ -219,6 +219,56 @@
     else clearDataCache();
   }
 
+  /* ===== 页面版本号 =====
+   * 直接取本页 app.js 的 ?v= 戳：构建时 scripts/version.js 会把
+   * index.html / admin.html 里所有 `?v=` 统一拨成构建时间戳 YYYYMMDDHHmm，
+   * 所以这个值与「本次部署」严格一致。不再另设一份版本常量 ——
+   * 常量早晚会忘了同步，那时左下角就成了假信息，比不显示更糟。
+   *
+   * 显示它的意义很实在：改完代码看不出效果时，低头看一眼版本号有没有变，
+   * 就能分清是「代码没生效」还是「浏览器还吃着旧缓存」，不用反复猜。
+   */
+  function readBuildVersion() {
+    try {
+      const tag = document.querySelector('script[src*="app.js"]');
+      const m = tag && tag.src ? String(tag.src).match(/[?&]v=(\d{8,14})/) : null;
+      return m ? m[1] : '';
+    } catch (e) { return ''; }
+  }
+  // 202609241448 → "v2026.09.24 14:48"（只有 8 位日期戳时就不带时分）
+  function formatVersion(raw) {
+    if (!raw || raw.length < 8) return '';
+    const y = raw.slice(0, 4), mo = raw.slice(4, 6), d = raw.slice(6, 8);
+    const hh = raw.slice(8, 10), mi = raw.slice(10, 12);
+    return (hh && mi) ? `v${y}.${mo}.${d} ${hh}:${mi}` : `v${y}.${mo}.${d}`;
+  }
+
+  /* 侧栏底部（页面左下角）：副标题 / 数据来源 / 版本号，逐行 <div>。
+   * 不拼 '\n' 的原因见 css/style.css 里 .side-foot 那段的注释（HTML 会把换行折掉）。
+   * 副标题为空时整行不输出，免得留一行空白。 */
+  function renderSideFoot(s) {
+    const foot = $('#sideFoot');
+    if (!foot) return;
+    foot.textContent = '';
+    const line = (txt, cls) => {
+      const t = String(txt == null ? '' : txt).trim();
+      if (!t) return null;
+      const d = document.createElement('div');
+      if (cls) d.className = cls;
+      d.textContent = t;          // 一律用 textContent：副标题来自配置，不走 innerHTML
+      foot.appendChild(d);
+      return d;
+    };
+    line(s.subtitle);
+    line('数据：data/sites.json');
+    const raw = readBuildVersion();
+    const ver = formatVersion(raw);
+    if (ver) {
+      const el = line(ver, 'sf-ver');   // 字号与上面两行一致，见 .side-foot .sf-ver
+      if (el) el.title = '当前部署版本 ' + raw + '（构建时自动生成，与静态资源缓存戳同源）';
+    }
+  }
+
   function renderHead() {
     const s = state.data.site || {};
     // 站点图标交给 js/logos.js 统一渲染：内置光伏图标 → 内联 SVG，
@@ -245,7 +295,7 @@
     if (heroT) $('#heroTitle').textContent = heroT;
     if (heroS) $('#heroSub').textContent = heroS;
     if (s.footer) $('#footer').textContent = s.footer;
-    $('#sideFoot').textContent = (s.subtitle || '') + '\n数据：data/sites.json';
+    renderSideFoot(s);
   }
 
   /* 顶栏高度是动态的：站点名称 / 描述的字号可在后台调大，顶栏会跟着变高，

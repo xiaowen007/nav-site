@@ -19,7 +19,7 @@ nav-site/
 │   ├── _lib.js       # 鉴权 / KV 读写 / 抓取 / AI 等公共库（_ 前缀不生成路由）
 │   ├── _accounts.js  # 账户与申请（PBKDF2 密码、角色鉴权、审核动作）
 │   └── api/          # /api/sites、/api/auth/*、/api/accounts/*、/api/applications/* …
-├── scripts/version.js # 部署时自动拨 ?v= 版本号破缓存
+├── scripts/version.js # 部署时自动拨 ?v= 版本号破缓存（主页左下角显示的版本号就取自这个戳）
 ├── css/style.css
 ├── js/app.js         # 前端渲染逻辑（含访问统计埋点、账户与申请 UI）
 ├── js/admin.js       # 管理面板逻辑
