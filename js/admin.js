@@ -30,18 +30,39 @@
   };
 
   // 轻量提示条（顶部浮现，自动消失）
+  // action 可选：{ label, onClick } —— 在提示右侧挂一个可点按钮（后悔药），
+  // 典型用法：收起设置面板后给一个「展开设置」的直达入口。
+  // 没有 action 时保持原样（pointer-events:none，纯提示不挡操作）。
   let toastTimer = null;
-  function toast(msg, ms) {
+  function toast(msg, ms, action) {
     let el = document.getElementById('toast');
     if (!el) {
       el = document.createElement('div');
       el.id = 'toast';
       el.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;'
+        + 'display:flex;align-items:center;gap:10px;max-width:min(92vw,660px);text-align:left;'
         + 'background:#1f2937;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;'
         + 'box-shadow:0 6px 20px rgba(0,0,0,.25);opacity:0;transition:opacity .2s,top .2s;pointer-events:none;';
       document.body.appendChild(el);
     }
     el.textContent = msg;
+    if (action && action.label) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = action.label;
+      b.style.cssText = 'flex:none;border:none;border-radius:14px;padding:4px 12px;font-size:12px;'
+        + 'font-weight:600;cursor:pointer;background:rgba(255,255,255,.2);color:#fff;font-family:inherit;';
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        clearTimeout(toastTimer);
+        el.style.opacity = '0'; el.style.top = '14px';
+        try { action.onClick(); } catch (e) {}
+      });
+      el.appendChild(b);
+      el.style.pointerEvents = 'auto'; // 只有带按钮时才允许点击，别挡住下面的操作
+    } else {
+      el.style.pointerEvents = 'none';
+    }
     requestAnimationFrame(() => { el.style.top = '18px'; el.style.opacity = '1'; });
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.style.opacity = '0'; el.style.top = '14px'; }, ms || 2200);
@@ -1931,6 +1952,8 @@
    * 因此改设置不必先保存就能在左侧看到效果。
    */
   const SIDE_TAB_KEY = 'nav_admin_side_tab';
+  /* 历史遗留键：早期版本把「展开/收起」也存这儿，结果收起一次就永久收起，
+     用户以为设置没了。现在只保留常量用于**清理**这个旧值，不再写入、不再读取。 */
   const SIDE_OPEN_KEY = 'nav_admin_side_open';
   const PREVIEW_KEY = 'nav_preview_data';
 
@@ -1948,13 +1971,59 @@
     try { localStorage.setItem(SIDE_TAB_KEY, name); } catch (e) {}
   }
 
-  function setSideOpen(open) {
+  /* 设置面板的展开 / 收起。
+   * **默认打开**：后台一进来面板就是展开的（展开状态不持久化，见 bindStudio）。
+   * 收起是临时动作，但收起后必须**一眼能呼出来**，所以做成「缩成卡片」而非隐藏：
+   *   ① 卡片本体（.studio-side.collapsed）——留在原位，带「点此展开 ▸」，
+   *      点整张卡片（或聚焦后回车）即展开，是主入口；
+   *   ② 顶栏「⚙ 展开设置」（#sideOpen）——吸顶，滚到页面最底下也点得到；
+   *   ③ 预览工具条「⚙ 打开设置」（#pvSettings）——视线本来就在预览区，最顺手。
+   * 三者状态全部由这里统一同步，杜绝「收起了却找不到地方打开」的死路。
+   * opts.silent = 静默（初始化时用，不弹提示）。
+   */
+  let sideHinted = false; // 本次会话是否已提示过「卡片在哪」
+  function setSideOpen(open, opts) {
     const side = $('#studioSide');
     if (!side) return;
+    const wasOpen = !side.classList.contains('collapsed');
     side.classList.toggle('collapsed', !open);
+
+    // 收起态整张卡片就是按钮：让它能被 Tab 聚焦、能被读屏识别
+    side.tabIndex = open ? -1 : 0;
+    side.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (!open) side.setAttribute('title', '点此展开「系统设置」');
+
+    // ② 顶栏按钮：收起时出现（吸顶，任何时候都点得到）
     const btn = $('#sideOpen');
     if (btn) btn.classList.toggle('show', !open);
-    try { localStorage.setItem(SIDE_OPEN_KEY, open ? '1' : '0'); } catch (e) {}
+
+    // ③ 预览工具条按钮：文案随状态切换，收起态高亮
+    const pvBtn = $('#pvSettings');
+    if (pvBtn) {
+      pvBtn.classList.toggle('on', !open);
+      pvBtn.textContent = open ? '⚙ 收起设置' : '⚙ 打开设置';
+      pvBtn.title = open ? '把「系统设置」收成一张小卡片，让预览拉通全宽' : '展开右侧的「系统设置」面板';
+    }
+
+    // 清掉旧版本留下的收起标记（不再写入：收起是临时动作，不跨会话生效）
+    try { localStorage.removeItem(SIDE_OPEN_KEY); } catch (e) {}
+
+    // 窄屏（≤1180px）下面板不再吸在右侧，而是页面底部的一个普通块：
+    // 展开后自动滚过去，否则会出现「明明点开了、屏幕上却什么都没有」的错觉。
+    if (open && !wasOpen && window.matchMedia('(max-width: 1180px)').matches) {
+      setTimeout(() => { try { side.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }, 30);
+    }
+
+    // 收起时说一句「卡片就在原地」，右侧还挂个「展开设置」后悔药（同一次会话只说一次）
+    if (!open && wasOpen && !(opts && opts.silent) && !sideHinted) {
+      sideHinted = true;
+      toast('已收起成右侧的小卡片 · 点卡片或右上角「⚙ 系统设置」都能展开', 5200,
+        { label: '展开设置', onClick: () => setSideOpen(true) });
+    }
+  }
+  function isSideOpen() {
+    const side = $('#studioSide');
+    return !!side && !side.classList.contains('collapsed');
   }
 
   // 把当前 state.data 推给预览 iframe（先落盘、再 postMessage，两条路都走一遍）
@@ -1980,20 +2049,44 @@
     const side = $('#studioSide');
     if (!side) return;
 
-    // 恢复上次的标签页与展开状态
-    let savedTab = 'home', savedOpen = null;
+    // 标签页记住上次的（这个无所谓）；**展开状态不记** —— 见下方注释
+    let savedTab = 'home';
     try { savedTab = localStorage.getItem(SIDE_TAB_KEY) || 'home'; } catch (e) {}
-    try { savedOpen = localStorage.getItem(SIDE_OPEN_KEY); } catch (e) {}
     switchSideTab(savedTab);
-    setSideOpen(savedOpen !== '0');
+    /* ⚠️ 展开状态特意**不持久化**：后台一进来就是展开的（默认打开）。
+       之前把 collapsed 写进 localStorage，导致「上次手滑收起一次 → 之后每次进后台
+       都是收起态」，用户只会觉得「设置没了、找不到」（真实反馈）。收起是**临时**动作，
+       不该跨会话生效；本次会话里收起了，也随时能靠卡片 / 顶栏「⚙ 展开设置」/
+       预览工具条「⚙ 打开设置」呼出来。 */
+    setSideOpen(true, { silent: true });
 
     $('#sideTabs').addEventListener('click', (e) => {
       const b = e.target.closest('.side-tab');
       if (b) switchSideTab(b.dataset.tab);
     });
-    $('#sideClose').addEventListener('click', () => setSideOpen(false));
+    $('#sideClose').addEventListener('click', (e) => {
+      e.stopPropagation(); // 别冒泡到卡片本体（那边是「展开」）
+      setSideOpen(false);
+    });
+    // 收起态：整张卡片就是「展开」按钮，点哪都行（此时卡内已无任何控件）
+    side.addEventListener('click', (e) => {
+      if (isSideOpen()) return;
+      if (e.target.closest('a, input, select, textarea')) return;
+      setSideOpen(true);
+    });
+    // 键盘可达：Tab 到卡片上回车 / 空格展开
+    side.addEventListener('keydown', (e) => {
+      if (isSideOpen()) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setSideOpen(true);
+      }
+    });
     const openBtn = $('#sideOpen');
     if (openBtn) openBtn.addEventListener('click', () => setSideOpen(true));
+    // 预览工具条上的设置开关：一个按钮既是收起也是打开（贴合「设置就在预览右侧」的心智）
+    const pvSettings = $('#pvSettings');
+    if (pvSettings) pvSettings.addEventListener('click', () => setSideOpen(!isSideOpen()));
 
     // —— 预览工具条 ——
     const seg = $('#pvDeviceSeg');
