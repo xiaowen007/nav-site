@@ -1041,11 +1041,71 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
   .fav-hint { display: none; }                  /* 触屏不能拖拽排序，提示无意义且挤占标题行 */
 }
 
+/* ===== 返回顶部：右下角浮动圆钮（主页 / 后台共用） =====
+   判据统一用 window.scrollY —— 两页的纵向滚动容器都是 window
+   （.topbar 是 sticky 吸顶，.layout / .admin 都是普通流），所以不需要按页面分支。
+   逻辑在 js/totop.js，两页各引一次。
+
+   z-index 取 40：高于顶栏(30)与侧栏遮罩(20)，低于后台登录遮罩(100)与各弹窗(90 / 1200)——
+   弹窗打开时按钮要沉在遮罩之下，不能浮上来抢焦点。
+
+   隐藏用 visibility 而不是 display:none：一是淡出能有过渡，
+   二是隐藏期间它不会被 Tab 键聚焦到（display:none 与 visibility:hidden 都可以，
+   但 opacity:0 单独用不行 —— 那样的"看不见的按钮"仍可被键盘点到）。 */
+.to-top {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--glass-brd);
+  background: var(--glass-3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px) scale(.9);
+  transition: opacity .2s ease, transform .2s ease, visibility .2s,
+              background .15s, border-color .15s, color .15s;
+}
+.to-top.on { opacity: 1; visibility: visible; transform: none; }
+.to-top:hover {
+  background: var(--glass-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.to-top:active { transform: scale(.94); }
+.to-top:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* 窄屏往角上收一点，别压住卡片；仍保持 40px 的触控热区 */
+@media (max-width: 640px) {
+  .to-top { right: 14px; bottom: 14px; width: 40px; height: 40px; font-size: 16px; }
+}
+
+/* 系统开启「减弱动态效果」时去掉位移（平滑滚动由 js/totop.js 同步判断） */
+@media (prefers-reduced-motion: reduce) {
+  .to-top { transition: opacity .12s ease, visibility .12s; transform: none; }
+  .to-top:active { transform: none; }
+}
+
 /* ===== 毛玻璃降级：不支持 backdrop-filter 时回落到不透明面板，保证可读性 ===== */
 @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   .topbar, .sidebar, .layout-top .top-nav { background: var(--panel); }
   .card, .mini-card { background: var(--glass-hover); }
   .modal, .login-box, .tb-searches .ws-engines { background: var(--panel); }
+  .to-top { background: var(--panel); }
 }
 @supports not (background: radial-gradient(#fff 0%, rgba(255,255,255,0) 60%)) {
   html { background: var(--bg); }
