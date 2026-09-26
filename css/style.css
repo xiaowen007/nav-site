@@ -4,6 +4,9 @@
   --text: #1f2933;
   --muted: #7b8794;
   --primary: #2f6fed;
+  /* 主色的加深档。给「需要压得住背景」的实心面用（返回顶部圆钮的渐变落点就是它）。
+     单靠 --primary 做纯色底，在白底页面上偏飘、不够醒目。 */
+  --primary-deep: #1a4fbf;
   --primary-soft: #e8f0fe;
   --border: #e4e9f0;
   --shadow: 0 2px 12px rgba(31, 41, 51, 0.06);
@@ -792,6 +795,7 @@ body.wallpaper::after {
   --text: #e6edf3;
   --muted: #8b98a5;
   --primary: #4f8cff;
+  --primary-deep: #2f6fed;
   --primary-soft: #1f2d44;
   --border: #2a3340;
   --shadow: 0 2px 12px rgba(0,0,0,.4);
@@ -1057,46 +1061,67 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
   right: 24px;
   bottom: 24px;
   z-index: 40;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid var(--glass-brd);
-  background: var(--glass-3);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  box-shadow: var(--glass-shadow);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 18px;
-  line-height: 1;
+  /* 光晕色 / 聚焦环色。放在这儿而不是两个主题令牌块里 ——
+     它只服务这一个组件，塞进全局表会把主题表撑乱。深色主题在下面单独覆盖。 */
+  --tt-glow: rgba(47, 111, 237, .40);
+  --tt-ring: rgba(47, 111, 237, .30);
+  /* 实心主色渐变，不再用毛玻璃：花哨壁纸下玻璃会糊成一块、反而没有存在感，
+     与「更醒目」正相反；实心底还顺带省掉一层 backdrop-filter 的合成开销。
+     渐变从 --primary 落到 --primary-deep，圆钮才显得"立"得起来，而不是一片平色。 */
+  border: 1px solid rgba(255, 255, 255, .30);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 56%),
+    linear-gradient(160deg, var(--primary), var(--primary-deep));
+  /* 两层投影：一层同色光晕让它从页面浮起来，一层冷色实投影压出厚度 */
+  box-shadow: 0 6px 18px var(--tt-glow), 0 2px 6px rgba(15, 23, 42, .22);
+  color: #fff;
   cursor: pointer;
   opacity: 0;
   visibility: hidden;
   transform: translateY(10px) scale(.9);
-  transition: opacity .2s ease, transform .2s ease, visibility .2s,
-              background .15s, border-color .15s, color .15s;
+  transition: opacity .2s ease, transform .2s ease, visibility .2s, box-shadow .2s ease;
+}
+[data-theme="dark"] .to-top {
+  --tt-glow: rgba(79, 140, 255, .46);
+  --tt-ring: rgba(79, 140, 255, .34);
+}
+/* 箭头用内联 SVG，而不是 ↑ 这个字符：字符的笔画粗细归字体管，压根改不动，
+   想加粗只能靠 font-weight 去赌系统字体有没有对应字形（很多时候并没有）。 */
+.to-top svg {
+  width: 23px;
+  height: 23px;
+  display: block;
+  transition: transform .2s ease;
 }
 .to-top.on { opacity: 1; visibility: visible; transform: none; }
 .to-top:hover {
-  background: var(--glass-hover);
-  border-color: var(--primary);
-  color: var(--primary);
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 12px 28px var(--tt-glow), 0 0 0 6px var(--tt-ring),
+              0 3px 8px rgba(15, 23, 42, .24);
 }
-.to-top:active { transform: scale(.94); }
-.to-top:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* 箭头自己也再向上挪一点，暗示"往上走"的方向 */
+.to-top:hover svg { transform: translateY(-1.5px); }
+.to-top:active { transform: translateY(-1px) scale(.94); }
+.to-top:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
-/* 窄屏往角上收一点，别压住卡片；仍保持 40px 的触控热区 */
+/* 窄屏往角上收一点，别压住卡片；仍保持 40px 以上的触控热区 */
 @media (max-width: 640px) {
-  .to-top { right: 14px; bottom: 14px; width: 40px; height: 40px; font-size: 16px; }
+  .to-top { right: 14px; bottom: 14px; width: 42px; height: 42px; }
+  .to-top svg { width: 21px; height: 21px; }
 }
 
 /* 系统开启「减弱动态效果」时去掉位移（平滑滚动由 js/totop.js 同步判断） */
 @media (prefers-reduced-motion: reduce) {
   .to-top { transition: opacity .12s ease, visibility .12s; transform: none; }
+  .to-top:hover { transform: none; }
+  .to-top:hover svg { transform: none; }
   .to-top:active { transform: none; }
 }
 
@@ -1105,7 +1130,9 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
   .topbar, .sidebar, .layout-top .top-nav { background: var(--panel); }
   .card, .mini-card { background: var(--glass-hover); }
   .modal, .login-box, .tb-searches .ws-engines { background: var(--panel); }
-  .to-top { background: var(--panel); }
+  /* 返回顶部圆钮**不在**这里降级：它是实心主色底，本来就不依赖 backdrop-filter。
+     早先那条 `.to-top { background: var(--panel) }` 必须删掉 ——
+     留着会把主色底替换成白色面板，越降级越浅，与「更醒目」背道而驰。 */
 }
 @supports not (background: radial-gradient(#fff 0%, rgba(255,255,255,0) 60%)) {
   html { background: var(--bg); }
