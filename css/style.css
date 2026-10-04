@@ -309,6 +309,10 @@ a { color: inherit; text-decoration: none; }
   opacity: .88;
   cursor: help;
 }
+/* 侧栏底部的三行说明同样是用户可填的文本（站点副标题里常见长网址），
+   长词不折行会把侧栏撑出横向滚动条 —— 侧栏 overflow-y:auto 会连带
+   把 overflow-x 算成 auto，于是分类栏底下多出一条横向滚动条。 */
+.side-foot, .side-foot .sf-ver { overflow-wrap: anywhere; }
 .sidebar-mask {
   display: none;
   position: fixed;
@@ -331,6 +335,10 @@ a { color: inherit; text-decoration: none; }
 .hero { margin-bottom: 18px; }
 .hero h1 { margin: 0 0 4px; font-size: var(--hero-title-size); }
 .hero p { margin: 0; color: var(--muted); font-size: var(--hero-sub-size); }
+/* 站点名称 / 描述由用户在后台自由填写，可能是一长串没有空格的英文 ——
+   这种词默认不在中间断开，会直接从盒子里溢出去、把整页撑出横向滚动条。
+   允许任意位置换行，长词才会老实折到下一行。页脚同理（也常被填成一串网址）。 */
+.hero h1, .hero p, .footer { overflow-wrap: anywhere; }
 
 .section { margin-bottom: 30px; scroll-margin-top: calc(var(--top-h) + 12px); }
 .section-head {
@@ -340,6 +348,8 @@ a { color: inherit; text-decoration: none; }
   margin: 0 0 14px;
   font-size: 17px;
   font-weight: 700;
+  /* 同 .card 的道理：flex 子项默认 min-width:auto，长分类名会把标题行顶宽 */
+  min-width: 0;
 }
 .section-head .sec-icon { font-size: 18px; }
 .section-head .sec-count {
@@ -350,6 +360,16 @@ a { color: inherit; text-decoration: none; }
   padding: 2px 8px;
   border-radius: 10px;
 }
+/* 分类名（图标与数量徽标之外的中间那一段）：
+ * ① min-width:0 —— 允许被压缩到内容宽度以下，否则无空格的长英文分类名
+ *    （如 "PhotovoltaicPowerStationSafetyRiskMonitoring"）不参与收缩，
+ *    把整行顶宽 → 整页横向溢出、手机上右侧留白（2026-10-04 修的同类问题）。
+ * ② overflow-wrap:anywhere —— 压缩后还得有地方落字：无空格长词默认不在中间断开，
+ *    会直接从盒子里溢出去。允许任意位置断行，长名才能老实换到第二行。
+ * ③ 图标与数量徽标不许被压：让名子去承担收缩，它们保持原样。 */
+.section-head > .sec-name, .sub-head > .sec-name { min-width: 0; overflow-wrap: anywhere; }
+.section-head > .sec-icon, .section-head > .sec-count,
+.sub-head > .sec-icon, .sub-head > .sec-count { flex-shrink: 0; }
 
 .cards {
   display: grid;
@@ -367,6 +387,14 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 12px;
   padding: 14px;
+  /* ⚠️ min-width: 0 不可删。grid 子项的默认值是 auto，等于「不得小于自身 min-content」，
+     而下面 .name / .desc 是 white-space: nowrap，min-content 就是**整个站名的完整宽度**。
+     于是一个长英文站名（如 "Nielsen Norman Group"）会把所在列顶宽，
+     而 grid 的同一列所有轨道是等宽的 —— 一列变宽，整张网格跟着变宽，
+     直接把文档撑过视口：手机上表现为「右侧一大块空白 + 底部横向滚动条」，
+     用户往右一划，内容整体左移、左边被切掉。
+     归零后轨道能正常收到 1fr 以内，长名走省略号（.name 已有 overflow/ellipsis）。 */
+  min-width: 0;
   /* 毛玻璃卡片：半透明 + 上沿高光边。刻意不加 backdrop-filter ——
      卡片数量多（一屏几十张），逐张实时模糊会明显掉帧；
      背后是柔和渐变 + 半透明填充，肉眼看同样是玻璃质感。 */
@@ -478,6 +506,13 @@ a { color: inherit; text-decoration: none; }
 /* ===== 系统设置：布局变体 ===== */
 /* 分类位置：顶部 */
 .layout-top .sidebar { display: none; }
+/* ⚠️ 这一条不能删：顶部导航是 JS 用 layout.insertBefore(nav, .content) 插进 .layout 的，
+   而 .layout 是 display:flex 的**横排**容器 —— 不加这条，导航与正文会并排抢宽度：
+   导航按 max-content 撑开（26 个分类 ≈ 1357px），正文被压到 68px，
+   于是整站内容挤成右侧一条竖线、每行一个字，还把文档撑出横向滚动条。
+   （2026-10-04 由新增的横向溢出测试发现，属长期潜伏、只在「分类在顶部」时才现形的布局崩坏。）
+   改成纵向堆叠后，导航占满一行、正文回到它下面，也就是这个布局本来的设计意图。 */
+.layout-top .layout { flex-direction: column; align-items: stretch; }
 .layout-top .top-nav {
   display: flex; padding: 12px 26px; gap: 8px;
   background: var(--glass-1);

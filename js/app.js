@@ -706,7 +706,7 @@
       const head = document.createElement('div');
       head.className = depth === 1 ? 'section-head' : ('sub-head lv' + depth);
       head.innerHTML = '<span class="sec-icon">' + catIconHtml(c.icon, depth === 1 ? 20 : (depth === 2 ? 18 : 16)) + '</span>' +
-        '<span>' + escapeHtml(c.name) + '</span>' +
+        '<span class="sec-name">' + escapeHtml(c.name) + '</span>' +
         '<span class="sec-count">' + total + '</span>';
       box.appendChild(head);
 
