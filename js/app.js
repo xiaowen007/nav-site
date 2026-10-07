@@ -672,6 +672,9 @@
         if (sec) window.scrollTo({ top: sec.offsetTop - topOffset() - 10, behavior: 'auto' });
       }, 50);
     }
+    // 顶部「常用收藏」：开关可能刚从 false 改回 true（hideFav 分支已把视图退回全部），
+    // 这里必须重渲染一次，否则行内 display:none 撤了、区块却还停在空状态
+    renderTopFavorites();
   }
 
   function renderSections() {
@@ -729,6 +732,8 @@
     if (!anyVisible) {
       wrap.innerHTML = '<div class="empty">没有找到匹配的站点 🔍</div>';
     }
+    // 顶部「常用收藏」跟着分类视图一起刷新（搜索词变化时同样要按关键词过滤）
+    renderTopFavorites();
     initScrollSpy();
   }
 
@@ -807,6 +812,8 @@
       star.title = on ? '取消收藏' : '加入常用收藏';
       updateFavCount();
       if (state.view === 'fav') renderFavorites();
+      // 顶部区块里的卡片也可能正被点，重建一次同步（取消收藏后那张卡片就该消失）
+      renderTopFavorites();
     });
     card.appendChild(star);
 
@@ -841,6 +848,7 @@
   /* 常用收藏视图：渲染收藏卡片 + 拖拽排序 */
   function renderFavorites() {
     state.view = 'fav';   // 与 renderSections 对称，避免 state.view 与真实渲染不一致
+    renderTopFavorites(); // 收藏视图已整块占用正文，把顶部区块撤掉，否则同一批卡片会出现两遍
     const wrap = $('#sections');
     wrap.innerHTML = '';
     const favs = getFavorites();
@@ -881,6 +889,92 @@
     });
     wrap.appendChild(sec);
     bindBack();
+  }
+
+  /* ===== 顶部「常用收藏」区块（常驻在 hero 与第一个分类之间） =====
+   * 与侧栏的收藏视图（renderFavorites）是**两套**，分工不同，别互相替代：
+   *   · 这里   = 快捷浏览。一进首页就看得见，限 FAV_TOP_LIMIT 个，超出给「查看全部」入口；
+   *   · 侧栏视图 = 完整列表 + 拖拽排序（点侧栏「⭐ 常用收藏」或本区块的「查看全部」进入）。
+   * 两者共用 localStorage.nav_favorites 与 buildCard()，所以星标一点、两边同步。
+   * 「始终显示」的取舍：点某个分类、甚至正在搜索时都保留本区块 —— 只有两种情况撤掉：
+   *   ① 后台把「显示常用收藏」关了；② 正文已被收藏视图整块占用（再来一份就是重复）。
+   * 搜索时若收藏里一条都没命中，也让位给搜索结果 —— 否则结果上方杵一个空区块很怪。
+   */
+  const FAV_TOP_LIMIT = 12;
+
+  function renderTopFavorites() {
+    const box = $('#favTop');
+    if (!box) return;
+    const s = state.data.site || {};
+
+    if (s.showFavorites === false || state.view === 'fav') {
+      box.innerHTML = '';
+      box.hidden = true;
+      return;
+    }
+
+    const kw = state.keyword.trim().toLowerCase();
+    const list = getFavorites().filter((f) =>
+      !kw || (f.name + ' ' + (f.desc || '') + ' ' + f.url).toLowerCase().includes(kw));
+    if (kw && list.length === 0) { box.innerHTML = ''; box.hidden = true; return; }
+
+    box.hidden = false;
+    box.innerHTML = '';
+
+    const sec = document.createElement('section');
+    sec.className = 'section fav-top-sec';
+
+    const head = document.createElement('div');
+    head.className = 'section-head';
+    head.innerHTML = '<span class="sec-icon">⭐</span>' +
+      '<span class="sec-name">常用收藏</span>' +
+      '<span class="sec-count">' + list.length + '</span>';
+    sec.appendChild(head);
+
+    // 一条收藏都没有：区块是常驻的，空着会让人以为坏了 —— 给一句怎么收藏的说明
+    if (list.length === 0) {
+      head.innerHTML += '<span class="fav-hint">点任意卡片右上角的 ☆ 即可收藏</span>';
+      const p = document.createElement('p');
+      p.className = 'fav-top-empty';
+      p.textContent = '还没有收藏的站点。把鼠标移到下面任意卡片的右上角，点一下 ☆，' +
+        '它就会固定到这里，方便随时打开。';
+      sec.appendChild(p);
+      box.appendChild(sec);
+      return;
+    }
+
+    const shown = list.slice(0, FAV_TOP_LIMIT);
+    const rest = list.length - shown.length;
+    if (rest > 0) {
+      head.innerHTML += '<span class="fav-hint">仅显示前 ' + FAV_TOP_LIMIT + ' 个</span>';
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'fav-back fav-top-more';
+      more.textContent = '查看全部 ' + list.length + ' 个 →';
+      more.addEventListener('click', openFavoritesView);
+      head.appendChild(more);
+    } else {
+      const hint = document.createElement('span');
+      hint.className = 'fav-hint';
+      hint.textContent = kw ? '已按搜索词筛选' : '点卡片右上角的 ☆ 可取消收藏';
+      head.appendChild(hint);
+    }
+
+    const cards = document.createElement('div');
+    cards.className = 'cards ' + cardClasses(s);
+    cards.style.setProperty('--card-radius', (s.cardRadius != null ? s.cardRadius : 14) + 'px');
+    shown.forEach((f) => cards.appendChild(buildCard(f)));
+    sec.appendChild(cards);
+    box.appendChild(sec);
+  }
+
+  /* 「查看全部」→ 走侧栏那条同样的路径，进完整收藏视图（可拖拽排序） */
+  function openFavoritesView() {
+    if (state.keyword) clearSearch();   // 带着搜索词进收藏视图会只剩筛过的几条，容易误以为丢了数据
+    state.view = 'fav';
+    setActive('__fav');
+    renderFavorites();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function bindFavDrag(card, fav) {

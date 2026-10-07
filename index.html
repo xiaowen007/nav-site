@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610062049" />
+  <link rel="stylesheet" href="css/style.css?v=202610071659" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -93,6 +93,11 @@
         <h1 id="heroTitle">共享导航</h1>
         <p id="heroSub">智能多功能响应式导航</p>
       </section>
+      <!-- 顶部「常用收藏」区块（常驻在 hero 与第一个分类之间）：
+           内容由 app.js 的 renderTopFavorites() 填充。
+           刻意**不放进 #sections** —— 那个容器每次 renderSections() 都会
+           innerHTML='' 重新生成，放在里面会跟着分类一起被清掉/重建。 -->
+      <div id="favTop" class="fav-top"></div>
       <div id="sections"><!-- 分类区块由 JS 注入 --></div>
       <footer class="footer" id="footer"></footer>
     </main>
@@ -181,9 +186,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202610062049"></script>
-  <script src="js/logos.js?v=202610062049"></script>
-  <script src="js/totop.js?v=202610062049"></script>
-  <script src="js/app.js?v=202610062049"></script>
+  <script src="js/lunar.js?v=202610071659"></script>
+  <script src="js/logos.js?v=202610071659"></script>
+  <script src="js/totop.js?v=202610071659"></script>
+  <script src="js/app.js?v=202610071659"></script>
 </body>
 </html>

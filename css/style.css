@@ -503,6 +503,30 @@ a { color: inherit; text-decoration: none; }
 .card.dragging { opacity: .4; }
 .card.drop-over { box-shadow: inset 0 2px 0 var(--primary); }
 
+/* 顶部「常用收藏」区块（常驻在 hero 与第一个分类之间）。
+   结构与分类区块完全同款（.section / .section-head / .cards 全复用），
+   这里只补三处：与下方分类的分隔、空态说明、以及「查看全部」按钮的位置。 */
+/* 撤掉区块时用的是 hidden 属性。hidden 只是 UA 样式表里的 [hidden]{display:none}，
+   作者样式里任何一条 display 都能盖掉它（本项目被这种反向覆盖坑过：@supports 降级块
+   曾把新配色改回旧色）。这里显式再写一遍兜住。 */
+.fav-top[hidden] { display: none; }
+.fav-top-sec {
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--border);
+}
+.fav-top-more { margin-left: 10px; }
+.fav-top-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--glass-2);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 /* ===== 系统设置：布局变体 ===== */
 /* 分类位置：顶部 */
 .layout-top .sidebar { display: none; }
