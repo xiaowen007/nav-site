@@ -655,6 +655,24 @@ body.wallpaper::after {
   font-size: 15px;
 }
 
+/* 加载失败 / 超时的说明面板（.empty 的加强版，由 app.js 的 loadingPanel() 渲染）。
+   存在的意义很实在：以前接口不响应时页面就是一片空白，用户分不清是「坏了」
+   还是「本来就没数据」。宁可难看一点，也不能让人对着空白页猜。 */
+.load-fail {
+  max-width: 580px;
+  margin: 0 auto;
+  text-align: left;
+  line-height: 1.8;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+}
+.load-fail .lf-title { display: block; font-size: 16px; color: var(--text); margin-bottom: 8px; }
+.load-fail .lf-line { font-size: 13.5px; color: var(--muted); word-break: break-word; }
+.load-fail .lf-retry { margin-top: 14px; }
+
 .footer {
   margin-top: 30px;
   padding-top: 18px;

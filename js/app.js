@@ -142,6 +142,47 @@
     });
   }
 
+  /* ===== 请求超时：这条以前没有，线上为此白屏过 =====
+   *
+   * fetch 是**没有内建超时**的。后端"连上了但一直不响应"（KV 慢、Function 冷启动卡住、
+   * 边缘节点抽风）时，这个 await 会挂很久很久 —— 而 loadData() 是 init() 的第一步，
+   * 它不返回，后面的 renderHead / buildSidebar / renderSections 一步都不会执行。
+   *
+   * 表现（2026-10-07 线上复现，与用户截图逐像素一致）：
+   *   页面停在 index.html 的**静态初始态** —— 只有 hero 大标题 + 侧栏那两行写死的
+   *   「⭐ 常用收藏 / 🏠 全部」，正文空白、侧栏没有分类、左下角连版本号都没有，
+   *   而且**不报任何错**。用户看到的就是"刷新一闪而过，内容就没了"。
+   *
+   * 所以每个请求都必须能被打断，超时就退到下一级兜底；三级都不行才报错。
+   */
+  const FETCH_TIMEOUT_MS = 8000;   // 单次请求上限（/api/sites 慢的时候要给 KV 留点余地）
+  const STATIC_TIMEOUT_MS = 5000;  // 静态文件走同一张 CDN，正常都是毫秒级
+  const WATCHDOG_MS = 10000;       // 总兜底：这么久还没渲染出东西就先给用户一个说法
+
+  // 数据最终来自哪一级（诊断用：出错时要能说清卡在哪一步）
+  let dataSource = '';
+
+  function describeErr(e) {
+    if (!e) return '未知错误';
+    if (e.name === 'AbortError' || /abort/i.test(String(e.message))) return '超时未响应';
+    if (e.status) return 'HTTP ' + e.status;
+    return e.message || String(e);
+  }
+
+  /* 带超时的 JSON 请求。计时器**覆盖到 res.json() 读完为止** ——
+     只包住 fetch() 是不够的：头回来了、body 一直不来同样会挂死。 */
+  async function fetchJson(url, ms) {
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, ms);
+    try {
+      const res = await fetch(url, ctl ? { cache: 'no-store', signal: ctl.signal } : { cache: 'no-store' });
+      if (!res.ok) { const e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // 经 <script> 标签读取数据（file:// 兜底）
   function loadDataViaScript() {
     return new Promise((resolve, reject) => {
@@ -149,35 +190,61 @@
       const s = document.createElement('script');
       // 注意：file:// 下带查询串会被当成文件名的一部分导致 404，故不加缓存戳
       s.src = 'data/sites.js';
+      // 脚本标签同样可能一直不触发 load / error（服务端不响应），补一个超时
+      let done = false;
+      const timer = setTimeout(() => { finish(); reject(new Error('读取超时未响应')); }, STATIC_TIMEOUT_MS);
+      function finish() {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        s.onload = null;
+        s.onerror = null;
+      }
       s.onload = () => {
-        if (window.__NAV_DATA__) resolve(window.__NAV_DATA__);
-        else reject(new Error('data/sites.js 未返回数据'));
+        const has = !!window.__NAV_DATA__;
+        finish();
+        if (has) resolve(window.__NAV_DATA__);
+        else reject(new Error('未返回数据'));
       };
-      s.onerror = () => reject(new Error('data/sites.js 读取失败'));
+      s.onerror = () => { finish(); reject(new Error('读取失败')); };
       document.head.appendChild(s);
     });
   }
 
   async function fetchSiteData() {
     const isOnline = location.protocol === 'http:' || location.protocol === 'https:';
+    const errors = [];
     // 在线环境优先读后端 /api/sites（Cloudflare 走 KV、本地 server.js 走 data/sites.json），
     // 与后台管理写入的是同一份数据，保证前台展示与后台修改实时同步。
     if (isOnline) {
       try {
-        const res = await fetch('/api/sites?t=' + Date.now(), { cache: 'no-store' });
-        if (res.ok) return await res.json();
+        const d = await fetchJson('/api/sites?t=' + Date.now(), FETCH_TIMEOUT_MS);
+        dataSource = '后端接口 /api/sites';
+        return d;
       } catch (e) {
-        // /api/sites 不可用（如未部署 Functions）→ 落到下方静态兜底
+        // /api/sites 不可用（未部署 Functions / 超时 / 非 2xx）→ 落到下方静态兜底
+        errors.push('/api/sites：' + describeErr(e));
       }
     }
     // file:// 直接打开，或 /api/sites 不可用时，读静态文件兜底
     try {
-      const res = await fetch('data/sites.json?t=' + Date.now(), { cache: 'no-store' });
-      if (res.ok) return await res.json();
+      const d = await fetchJson('data/sites.json?t=' + Date.now(), STATIC_TIMEOUT_MS);
+      dataSource = '静态文件 data/sites.json';
+      return d;
     } catch (e) {
       // fetch 被拦截（file://）→ 退回脚本标签读取
+      errors.push('data/sites.json：' + describeErr(e));
     }
-    return await loadDataViaScript();
+    try {
+      const d = await loadDataViaScript();
+      dataSource = '兜底文件 data/sites.js';
+      return d;
+    } catch (e) {
+      errors.push('data/sites.js：' + describeErr(e));
+    }
+    const err = new Error('导航数据加载失败');
+    err.detail = errors;   // 逐条列给用户看，别让人对着空白页猜
+    throw err;
   }
 
   /* ⛔ 不要再往这里加「按名称屏蔽分类」之类的硬编码（2026-10-07 移除）。
@@ -198,16 +265,30 @@
     // 没有预览数据（第一次打开后台）时照常走下面的在线加载。
     if (PREVIEW_MODE) {
       const pv = readPreviewData();
-      if (pv) { state.data = pv; return; }
+      if (pv) { state.data = pv; dataSource = '后台预览数据'; return; }
     }
     let fresh;
     try {
       fresh = await fetchSiteData();
     } catch (e) {
       const snap = readDataCache();
-      if (!snap) throw new Error(e.message || '无法加载导航数据');
-      state.data = snap; // 离线兜底：用上次快照渲染
+      if (!snap) throw e;                 // 带 detail 抛出去，错误面板才能逐条列
+      state.data = snap;                  // 离线兜底：用上次快照渲染
+      dataSource = '本机快照（上次成功加载的数据）';
       return;
+    }
+    // 接口 200 不等于数据可用：Cloudflare 边缘出错时会回一段 HTML 或 {"error":...}，
+    // 那种东西塞进 state.data 会让后面每一处 state.data.categories 都炸。
+    if (!fresh || typeof fresh !== 'object' || !Array.isArray(fresh.categories)) {
+      const reason = (!fresh || typeof fresh !== 'object')
+        ? '返回的不是 JSON 对象'
+        : '返回的数据里没有 categories 字段';
+      const snap = readDataCache();
+      if (snap) { state.data = snap; dataSource = '本机快照（接口数据不可用）'; return; }
+      const e2 = new Error('后端返回的数据不可用：' + reason);
+      e2.detail = ['来源：' + (dataSource || '未知'),
+        '期望结构是 { site: {...}, categories: [...] }'];
+      throw e2;
     }
     state.data = fresh;
     // 缓存开关：开启才保留快照；关闭则清掉，保证每次都拿最新数据
@@ -764,7 +845,16 @@
     });
 
     if (!anyVisible) {
-      wrap.innerHTML = '<div class="empty">没有找到匹配的站点 🔍</div>';
+      const cats = Array.isArray(state.data && state.data.categories) ? state.data.categories : [];
+      if (!cats.length && !kw) {
+        // 「数据源里本来就没有分类」和「搜索词没匹配上」是两回事，
+        // 以前都回同一句"没有找到匹配的站点 🔍"，用户会以为是搜索的锅。
+        wrap.innerHTML = '<div class="empty">后端返回的数据里没有任何分类（来源：' +
+          escapeHtml(dataSource || '未知') +
+          '）<br/>请到后台「① 导航数据管理」确认分类与链接是否还在。</div>';
+      } else {
+        wrap.innerHTML = '<div class="empty">没有找到匹配的站点 🔍</div>';
+      }
     }
     // 顶部「常用收藏」跟着分类视图一起刷新（搜索词变化时同样要按关键词过滤）
     renderTopFavorites();
@@ -1447,30 +1537,96 @@
     if (state.view === 'fav') showAllSections();
   }
 
+  /* ===== 加载失败 / 卡住时，必须让用户看见原因 =====
+   * 以前这里失败只会往 #sections 塞一行字，而"接口一直不响应"连这一行都不会出现 ——
+   * 页面停在静态初始态，用户完全无从判断是坏了、还是本来就没数据。
+   * 现在统一走这个面板：标题 + 逐条原因 + 重试按钮。
+   * 面板放在 #sections 里，数据一旦到齐，renderSections() 会把它自然覆盖掉。 */
+  let renderedOnce = false;
+  let watchdog = null;
+
+  function loadingPanel(title, lines) {
+    const wrap = $('#sections');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = 'empty load-fail';
+    const h = document.createElement('b');
+    h.className = 'lf-title';
+    h.textContent = title;
+    box.appendChild(h);
+    (lines || []).filter(Boolean).forEach((t) => {
+      const p = document.createElement('div');
+      p.className = 'lf-line';
+      p.textContent = t;
+      box.appendChild(p);
+    });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn sm primary lf-retry';
+    btn.textContent = '重新加载';
+    btn.addEventListener('click', () => { try { location.reload(); } catch (e) {} });
+    box.appendChild(btn);
+    wrap.appendChild(box);
+  }
+
+  function startWatchdog() {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      if (renderedOnce) return;
+      loadingPanel('导航数据加载超时', [
+        '已等待 ' + Math.round(WATCHDOG_MS / 1000) + ' 秒仍未拿到数据'
+          + (dataSource ? '（当前停在：' + dataSource + '）' : '（接口没有任何响应）'),
+        '常见原因：后端 /api/sites 响应慢、CDN 或 KV 暂时不可用、本机网络不稳。',
+        '可以先点「重新加载」重试；若反复出现，把这一屏截图发给管理员即可定位。'
+      ]);
+    }, WATCHDOG_MS);
+  }
+
   async function init() {
     bindUI();
+    // 兜底看门狗：无论卡在哪一步，都不会让用户对着空白页干等
+    startWatchdog();
     try {
       await loadData();
     } catch (err) {
-      $('#sections').innerHTML = '<div class="empty">加载数据失败：' + escapeHtml(err.message) +
-        '<br/>推荐用 <code>node server.js</code> 启动后访问 <code>http://localhost:8787</code>。' +
-        '<br/>若直接双击打开本文件（file:// 协议），需确保同目录存在 <code>data/sites.js</code> 兜底文件' +
-        '（由 <code>node scripts/gen-data-js.mjs</code> 生成，保存数据时会自动同步）。</div>';
+      clearTimeout(watchdog);
+      loadingPanel('导航数据加载失败', [
+        (err && err.message) || '未知错误',
+        ...((err && err.detail) || []),
+        '本地预览用 node server.js 启动后访问 http://localhost:8787；',
+        '若直接双击打开本文件（file:// 协议），需确保同目录存在 data/sites.js 兜底文件' +
+        '（由 node scripts/gen-data-js.mjs 生成，保存数据时会自动同步）。'
+      ]);
       return;
     }
-    renderHead();
-    renderWebSearch();
-    buildSidebar();
-    renderSections();
-    applySettings();
-    updateFavCount();
-    // 账户：绑定登录/注册/用户中心交互，并读取当前身份（未登录或接口不可用都不影响浏览）
-    initAccount();
-    // 首次加载：立即刷新天气与日期（「跟随网页刷新」优先）
-    refreshWeather(true);
-    initCalendar();
-    // 定时自动刷新：跨天翻页 + 天气定时更新（页面长期挂着不刷新也能自动走）
-    startAutoRefresh();
+    // 渲染链整体兜住：任何一步抛错都要给出可见原因，绝不能留一屏空白
+    try {
+      renderHead();
+      renderWebSearch();
+      buildSidebar();
+      renderSections();
+      applySettings();
+      updateFavCount();
+      renderedOnce = true;
+      clearTimeout(watchdog);
+    } catch (err) {
+      clearTimeout(watchdog);
+      loadingPanel('页面渲染出错', [
+        (err && err.message) || String(err),
+        '数据来源：' + (dataSource || '未知'),
+        '这通常是数据里某个字段异常导致的，把这一屏截图发给管理员即可定位。'
+      ]);
+      return;
+    }
+    // 以下模块都属于「锦上添花」：账户、天气、日历任一出问题都不该影响浏览，
+    // 所以逐个兜住。注意它们大多是 async —— 光靠 try/catch 拦不住，
+    // 必须接住返回的 Promise，否则会变成 unhandledrejection。
+    const safe = (fn) => { try { const r = fn(); if (r && r.catch) r.catch(() => {}); } catch (e) {} };
+    safe(initAccount);
+    safe(() => refreshWeather(true));
+    safe(initCalendar);
+    safe(startAutoRefresh);
     // 视口变化会让顶栏换行 / 站名描述重新排布，高度要跟着重算
     window.addEventListener('resize', scheduleSyncTopHeight);
     // 自定义字体加载完成后文字尺寸会跳一下，再量一次更稳
@@ -1478,6 +1634,20 @@
       document.fonts.ready.then(scheduleSyncTopHeight).catch(() => {});
     }
   }
+
+  /* 首屏还没渲染出来就崩掉的情况，也要有个说法。
+     只认带 message 的脚本错误（资源加载失败不带 message，忽略掉，别吓人）。 */
+  window.addEventListener('error', (e) => {
+    if (renderedOnce || !e || !e.message) return;
+    clearTimeout(watchdog);
+    loadingPanel('页面脚本出错', [String(e.message), '点下面按钮可重新加载试试。']);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    if (renderedOnce) return;
+    clearTimeout(watchdog);
+    const r = e && e.reason;
+    loadingPanel('页面脚本出错', [String((r && (r.message || r)) || r), '点下面按钮可重新加载试试。']);
+  });
 
   /* ===== 天气模块（主页左上角） ===== */
   const WMO = {
@@ -1678,5 +1848,15 @@
     window.addEventListener('online', () => { refreshWeather(true); });
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  /* 启动。
+     ⚠️ 不能只写 document.addEventListener('DOMContentLoaded', init)：
+     一旦本脚本因为任何原因**晚于 DOMContentLoaded 才执行**（被代理 / 扩展改成异步、
+     被网关延迟、脚本被缓存后异步注入……），那个事件早就过去了，监听器永远等不到，
+     init() 一次都不会跑 —— 页面就永久停在 index.html 的静态初始态。
+     先看 readyState，已经就绪就直接跑（js/totop.js 用的是同一套写法）。 */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

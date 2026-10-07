@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610072122" />
+  <link rel="stylesheet" href="css/style.css?v=202610072249" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -43,6 +43,13 @@
     .console { display:grid; grid-template-columns: 220px 1fr; gap:16px; }
     .cat-pane { border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--bg); align-self:start; }
     .cat-pane .cp-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    /* 分类面板里的「常用收藏」开关行。
+       为什么放在这里：主页上「⭐ 常用收藏」就显示在侧栏分类区的最上面，
+       用户想找它的开关时，第一眼看的是这块分类面板，而不是右侧
+       「系统设置 → 首页设置 → 分类设置」里那一个。两处是同一个设置（双向同步）。 */
+    .cat-fav-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 2px 2px; }
+    .cat-fav-label { font-size:12.5px; font-weight:600; color:var(--text); }
+    .cat-fav-hint { font-size:11.5px; line-height:1.6; color:var(--muted); margin:2px 0 8px; }
     .cat-list { display:flex; flex-direction:column; gap:4px; max-height:460px; overflow:auto; }
     .cat-item { display:flex; align-items:center; gap:6px; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:13px; }
     .cat-item:hover { background:#fff; }
@@ -679,6 +686,19 @@
                 <strong class="hint">分类</strong>
                 <button class="btn sm ghost" id="addCat">＋分类</button>
               </div>
+              <!-- 「常用收藏」入口开关。它跟右侧「系统设置 → 首页设置 → 分类设置」里
+                   那一个是**同一个设置**（双向同步），只是放到用户真正会找的地方：
+                   「常用收藏」在主页上就长在分类区的最上面，来后台找它的人看的是这块面板。 -->
+              <div class="cat-fav-row">
+                <span class="cat-fav-label">⭐ 常用收藏</span>
+                <label class="switch" title="开启后，主页侧栏（分类在顶部时是顶部导航）会显示「常用收藏」入口">
+                  <input type="checkbox" id="setShowFavoritesCat"><span class="slider"></span>
+                </label>
+              </div>
+              <div class="cat-fav-hint">
+                主页是否显示「常用收藏」入口。收藏内容保存在<strong>访问者自己的浏览器</strong>里，
+                不上传服务器，换设备 / 换浏览器看不到。
+              </div>
               <div class="cat-list" id="catList"></div>
               <div class="hint" style="margin-top:8px;line-height:1.6"><b>拖动左侧 ⋮⋮ 可调整分类顺序</b>（同级内拖动，主分类排的就是主页顺序），拖完点顶部 <b>💾 保存修改</b> 才写入主页；悬停分类可点 <b>＋</b> 添加子分类（最多 3 级）；点 <b>▾</b> 展开 / 收起子级。</div>
             </div>
@@ -1225,9 +1245,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202610072122"></script>
-  <script src="js/totop.js?v=202610072122"></script>
-  <script src="js/wallpapers.js?v=202610072122"></script>
-  <script src="js/admin.js?v=202610072122"></script>
+  <script src="js/logos.js?v=202610072249"></script>
+  <script src="js/totop.js?v=202610072249"></script>
+  <script src="js/wallpapers.js?v=202610072249"></script>
+  <script src="js/admin.js?v=202610072249"></script>
 </body>
 </html>

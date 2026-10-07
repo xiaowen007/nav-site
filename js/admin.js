@@ -1312,7 +1312,12 @@
       ).join('');
 
     $('#setRememberCategory').checked = !!s.rememberCategory;
-    $('#setShowFavorites').checked = s.showFavorites !== false;
+    // 「常用收藏」开关有两处入口（分类面板 / 首页设置→分类设置），它们是同一个设置，
+    // 回填时必须一起填 —— 只填一个的话，另一个会带着默认未选中状态出现在用户面前。
+    const favOn = s.showFavorites !== false;
+    $('#setShowFavorites').checked = favOn;
+    const favCatSw = $('#setShowFavoritesCat');
+    if (favCatSw) favCatSw.checked = favOn;
 
     const csLv = cardSizeLevel(s.cardSize);
     const csEl = $('#setCardSize');
@@ -2138,6 +2143,13 @@
     let timer = null;
     const schedule = () => {
       try { collectSettings(); } catch (e) {}
+      // 「常用收藏」两处开关同步：主开关（首页设置→分类设置）是唯一数据源，
+      // 分类面板那个只是同一设置的第二个入口。collectSettings() 读的是主开关，
+      // 所以点分类面板那个时，必须**先**把值写进主开关再进来（见下面的监听）。
+      try {
+        const a = $('#setShowFavorites'), b = $('#setShowFavoritesCat');
+        if (a && b) b.checked = a.checked;
+      } catch (e) {}
       // 拖滑块 / 在输入框里打字同样是「有未保存的改动」，这里统一点亮脏标记。
       // 之前只有分段按钮和开关会置脏，于是拖完滑块后顶栏「保存更改」既不变色也不呼吸，
       // 用户很容易以为已经保存过了（预览虽然即时变了，但没落库）。
@@ -2148,6 +2160,17 @@
     side.addEventListener('click', (e) => { if (e.target.closest('.seg-btn, button, .switch')) schedule(); });
     side.addEventListener('input', schedule);
     side.addEventListener('change', schedule);
+
+    // 分类面板里的「常用收藏」开关不在 side 容器内，上面那三个委托监听收不到它，
+    // 单独接一份：先把值同步给主开关，再走同一套 collectSettings + 预览推送。
+    const favCatSw = $('#setShowFavoritesCat');
+    if (favCatSw) {
+      favCatSw.addEventListener('change', () => {
+        const main = $('#setShowFavorites');
+        if (main) main.checked = favCatSw.checked;
+        schedule();
+      });
+    }
   }
 
   /* ================= 主流程 ================= */
