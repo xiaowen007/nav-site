@@ -39,10 +39,13 @@
   }
   function updateFavCount() {
     const n = getFavorites().length;
-    const el = document.getElementById('favCount');
+    // 侧栏一个、顶栏一个（分类在顶部时只有顶栏那个可见，见 buildTopNav），两处都要同步。
     // 注意：.fav-count 的样式表默认是 display:none，清成 '' 会回落到 display:none（角标永远不显示），
     // 必须显式写成 inline-block，否则「收藏数量」永远看不见。
-    if (el) { el.textContent = n; el.style.display = n ? 'inline-block' : 'none'; }
+    ['favCount', 'favCountTop'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = n; el.style.display = n ? 'inline-block' : 'none'; }
+    });
   }
   function reorderFavorites(fromUrl, toUrl) {
     const favs = getFavorites();
@@ -445,7 +448,16 @@
       navItems.push('<a class="' + allCls + ' lv' + depth + '" data-target="' + escapeHtml(c.id) + '" href="#' + escapeHtml(c.id) + '">' +
         catIconHtml(c.icon, depth === 1 ? 16 : 14) + ' ' + escapeHtml(c.name) + '</a>');
     });
-    nav.innerHTML = '<a class="' + allCls + '" data-target="all" href="#all">🏠 全部</a>' + navItems.join('');
+    /* 「常用收藏」入口（2026-10-07 补）：
+     * 分类在顶部时**侧栏整个不显示**，而顶栏原先只有「全部 + 各分类」——
+     * 于是用户没有任何路径进入收藏视图（顶部区块只展示前 12 个，「查看全部」够不着）。
+     * 这里放在「全部」之后、第一个分类之前，位置与侧栏那份对称。
+     * 带 .fav-entry 类是为了复用 applySettings() 里那套「后台开关控制显隐」的逻辑，
+     * 不要再写一套自己的显隐判断。 */
+    const favItem = '<a class="' + allCls + ' fav-entry" data-target="__fav" href="#__fav">⭐ 常用收藏' +
+      '<span class="fav-count" id="favCountTop">0</span></a>';
+    nav.innerHTML = '<a class="' + allCls + '" data-target="all" href="#all">🏠 全部</a>' +
+      favItem + navItems.join('');
     layout.insertBefore(nav, layout.querySelector('.content'));
     nav.querySelectorAll('.' + allCls).forEach((a) => {
       a.addEventListener('click', (e) => {
@@ -455,6 +467,14 @@
           if (state.view !== 'sections') { state.view = 'sections'; renderSections(); }
           setActive('all');
           window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        // 收藏入口：行为与侧栏那份保持一致（再点一次返回全部分类，收藏视图不是死胡同）。
+        // 不能落到下面的分类分支 —— 那里会去找 #sec-__fav，找不到就什么都发生，
+        // 表现成「点了没反应」。
+        if (t === '__fav') {
+          if (state.view === 'fav') { showAllSections(); return; }
+          openFavoritesView();
           return;
         }
         if (state.keyword) clearSearch();
@@ -644,20 +664,23 @@
   /* 集中应用所有设置（在数据加载完成后调用） */
   function applySettings() {
     const s = state.data.site || {};
+    // 分类位置：顶部
+    // ⚠️ 必须排在下面「同步收藏入口显隐」之前：buildTopNav() 会**新插入**一个 .fav-entry，
+    // 晚于那次 forEach 才出现的节点不会被同步到。分类在顶部时侧栏整个不显示，
+    // 顶栏那一个就是唯一入口，漏同步会直接表现成「找不到常用收藏」（2026-10-07 修）。
+    if (s.categoryPosition === 'top') {
+      document.documentElement.classList.add('layout-top');
+      buildTopNav();
+    }
     // 隐藏常用收藏
     // 注意：这里写的是行内样式。若只处理 === false 分支，在后台把开关重新打开后
     // 行内 display:none 会一直残留在节点上，导致「常用收藏」再也点不出来。两个分支都要处理。
     const hideFav = s.showFavorites === false;
     document.querySelectorAll('.fav-entry').forEach((e) => { e.style.display = hideFav ? 'none' : ''; });
     if (hideFav) {
-      // 若当前在收藏视图，自动退回全部
+      // 若在收藏视图，自动退回全部
       if (state.active === '__fav') state.active = 'all';
       if (state.view === 'fav') showAllSections();
-    }
-    // 分类位置：顶部
-    if (s.categoryPosition === 'top') {
-      document.documentElement.classList.add('layout-top');
-      buildTopNav();
     }
     // 搜索框位置：上方
     if (s.searchPosition === 'above') {

@@ -463,10 +463,16 @@ a { color: inherit; text-decoration: none; }
 .fav-star:hover { background: var(--bg); color: #f0a020; }
 .fav-star.on { color: #f0a020; }
 
-/* 常用收藏侧栏入口与提示 */
+/* 常用收藏入口与提示 */
 /* 与下方「全部 / 分类」留出间距，降低误点概率（误点会切进收藏视图） */
 .fav-entry { font-weight: 600; margin-bottom: 8px; }
 .fav-entry.active { background: rgba(240,160,32,.18); color: #f0a020; }
+/* 顶栏里的那一份（分类在顶部时侧栏整个不显示，顶栏是唯一入口，见 app.js buildTopNav）：
+   · 清掉侧栏竖排才需要的下间距，否则它比同排的分类项矮 8px、对不齐；
+   · 角标不要 margin-left:auto —— 顶栏项是 inline-flex，宽度由内容决定，
+     那个 auto 把角标连同整项撑成怪异的间距。 */
+.layout-top .top-nav a.fav-entry { margin-bottom: 0; }
+.layout-top .top-nav a.fav-entry .fav-count { margin-left: 0; }
 .fav-count {
   margin-left: auto;
   font-size: 12px;
