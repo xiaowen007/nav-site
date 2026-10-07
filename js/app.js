@@ -1556,6 +1556,9 @@
     h.textContent = title;
     box.appendChild(h);
     (lines || []).filter(Boolean).forEach((t) => {
+      // 正文第一行常常就是 title 本身（比如 err.message === '导航数据加载失败'），
+      // 重复一遍看着像没写完，直接跳过。
+      if (String(t).trim() === String(title).trim()) return;
       const p = document.createElement('div');
       p.className = 'lf-line';
       p.textContent = t;
