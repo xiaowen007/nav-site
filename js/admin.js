@@ -324,11 +324,16 @@
     });
   }
   // 按 id 定位，返回 { cat, parent, siblings, index, depth } 或 null
+  // ⚠️ 一律按字符串比较：调用方拿到的 id 常常来自 DOM（`el.dataset.cid`、
+  // `<option value>`），**读出来永远是字符串**；若数据里的 id 是数字
+  // （导入的 JSON 很容易这样，`if (!c.id)` 只在 id 为空时才补 slug），
+  // 严格相等就会全部落空 ⇒ 拖拽 dragover 不 preventDefault（拖不动）、
+  // 「转移到该分类」永远提示"请选择目标分类"，而且都不报错。
   function findCat(id) {
     let hit = null;
     walkCats(state.data.categories, (c, parent, depth) => {
       if (hit) return false;
-      if (c.id === id) {
+      if (String(c.id) === String(id)) {
         const siblings = parent ? kids(parent) : state.data.categories;
         hit = { cat: c, parent, siblings, index: siblings.indexOf(c), depth };
         return false;
@@ -361,7 +366,7 @@
   // id 是否为 node 的子孙（删除父分类后需重置选中项）
   function isDescendant(id, node) {
     let found = false;
-    walkCats(kids(node), (c) => { if (c.id === id) found = true; });
+    walkCats(kids(node), (c) => { if (String(c.id) === String(id)) found = true; });
     return found;
   }
 
@@ -868,6 +873,11 @@
         const sibs = a.siblings;
         const [item] = sibs.splice(a.index, 1);
         sibs.splice(sibs.indexOf(b.cat), 0, item);
+        // 拖完就重编号 order（仅当这批分类原本带 order 时）。
+        // 否则前台 sortCats 会按**旧** order 把它们排回去，用户看到的就是"拖了没反应"。
+        if (sibs.some((c) => c && c.order != null && c.order !== '')) {
+          sibs.forEach((c, i) => { if (c) c.order = i + 1; });
+        }
         state.dirty = true; renderCats(); updateSaved();
       });
     });

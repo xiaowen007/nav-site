@@ -117,7 +117,6 @@
   function applyPreviewData(data) {
     if (!data || !Array.isArray(data.categories)) return;
     state.data = data;
-    dropHiddenCategories(state.data);
     // layout-top / search-above 是「只加不减」的全局 class，顶部导航也是插入式节点：
     // 必须先把上一次的布局痕迹清干净，否则从「顶部」切回「左侧」时布局回不去。
     document.documentElement.classList.remove('layout-top', 'search-above');
@@ -178,29 +177,25 @@
     return await loadDataViaScript();
   }
 
-  /* 需要彻底移除的分类（按名称匹配，含子级）。
-   * 背景：数据层（data/sites.json、functions/_seed.js）已删除「常用推荐」，
-   * 但线上数据存在 Cloudflare KV 中，若 KV 里仍留有旧副本，仅改文件部署后不会生效。
-   * 这里在渲染前统一屏蔽，保证线上一定能去掉；日后若想恢复，清空此数组即可。
+  /* ⛔ 不要再往这里加「按名称屏蔽分类」之类的硬编码（2026-10-07 移除）。
+   *
+   * 曾经有一份 `HIDDEN_CATEGORY_NAMES = ['常用推荐']`，在渲染前按名称把同名分类
+   * 连同子级一起 filter 掉。当时的理由是：数据层（data/sites.json、functions/_seed.js）
+   * 已删除「常用推荐」，但线上数据在 Cloudflare KV 里，仅改文件部署去不掉旧副本，
+   * 所以在前端兜一道。
+   *
+   * 代价是**用户永远建不出叫这个名字的分类**：他后来在后台重建了「常用推荐」，
+   * 后台看得见、主页却死活不显示，排查半天才发现是被这段硬编码吃掉的。
+   * 结论：数据层要删分类就删数据本身；前端按名字拦截会把数据问题和显示问题
+   * 混成一团，且用户完全没有自服务的余地。
    */
-  const HIDDEN_CATEGORY_NAMES = ['常用推荐'];
-  function dropHiddenCategories(data) {
-    if (!data || !Array.isArray(data.categories)) return;
-    const hide = (c) => HIDDEN_CATEGORY_NAMES.indexOf(c && c.name) >= 0;
-    const walk = (list) => list.filter((c) => {
-      if (!c || hide(c)) return false;
-      if (Array.isArray(c.children)) c.children = walk(c.children);
-      return true;
-    });
-    data.categories = walk(data.categories);
-  }
 
   async function loadData() {
     // 后台「首页预览」：优先用后台推来的「尚未保存」的数据，改完即见。
     // 没有预览数据（第一次打开后台）时照常走下面的在线加载。
     if (PREVIEW_MODE) {
       const pv = readPreviewData();
-      if (pv) { state.data = pv; dropHiddenCategories(state.data); return; }
+      if (pv) { state.data = pv; return; }
     }
     let fresh;
     try {
@@ -209,11 +204,9 @@
       const snap = readDataCache();
       if (!snap) throw new Error(e.message || '无法加载导航数据');
       state.data = snap; // 离线兜底：用上次快照渲染
-      dropHiddenCategories(state.data);
       return;
     }
     state.data = fresh;
-    dropHiddenCategories(state.data);
     // 缓存开关：开启才保留快照；关闭则清掉，保证每次都拿最新数据
     if (fresh.site && fresh.site.cacheEnabled === true) writeDataCache(fresh);
     else clearDataCache();
@@ -330,7 +323,26 @@
   /* 分类排序：同级别按 order 升序（缺省按 name，中文 localeCompare）。
      返回浅拷贝新树（递归排序 children），不修改原 state.data。
      给某个分类加 "order": 数字（越小越前）即可手动置顶，缺省按 name 排。 */
+  /* 分类排序。⭐ 2026-10-07 关键修正：**默认不再排序，原样保留数组顺序**。
+   *
+   * 起因：用户在后台拖动主分类排序，正文区块的顺序变了，左侧分类栏却纹丝不动 ——
+   * 因为这里无条件按 `name` 的 zh-Hans-CN（拼音）重排了一遍，把拖动结果覆盖掉。
+   * 而 `order` 字段后台没有任何入口可以设置（数据里也一个都没有），所以那段
+   * cmp 永远走"两侧都没 order"的分支，等价于「永远按拼音排」。
+   *
+   * 现在的规则：**只有当这一层里真的存在 order 时，才按 order 排**。
+   * 数组顺序本身就是用户拖出来的顺序，不该被二次排序推翻。
+   * （order 的支持保留着，是为了兼容早期手写 order 的数据，不识别它反而会让那些站点的顺序变乱。）
+   */
   function sortCats(list) {
+    const arr = Array.isArray(list) ? list : [];
+    const mapped = (src) => src.map((c) => {
+      const nc = Object.assign({}, c);
+      if (c.children && c.children.length) nc.children = sortCats(c.children);
+      return nc;
+    });
+    const usesOrder = arr.some((c) => c && c.order != null && c.order !== '');
+    if (!usesOrder) return mapped(arr);
     const cmp = (a, b) => {
       const oa = a.order, ob = b.order;
       const ha = oa != null && oa !== '', hb = ob != null && ob !== '';
@@ -339,11 +351,7 @@
       if (hb) return 1;
       return String(a.name||'').localeCompare(String(b.name||''), 'zh-Hans-CN', { numeric: true });
     };
-    return [...list].sort(cmp).map(c => {
-      const nc = Object.assign({}, c);
-      if (c.children && c.children.length) nc.children = sortCats(c.children);
-      return nc;
-    });
+    return mapped([...arr].sort(cmp));
   }
 
   function buildSidebar() {
@@ -724,7 +732,10 @@
       return { el: box, count: total };
     }
 
-    state.data.categories.forEach((c) => {
+    // ⭐ 顺序的唯一来源就是 sortCats（它默认保留数组顺序，只有存在 order 时才按 order 排）。
+    // 侧栏 / 顶部导航走的是同一个函数 —— 三处必须用同一份顺序，否则「侧栏一个排法、
+    // 正文另一个排法」，用户拖动后就会发现两边对不上（2026-10-07）。
+    sortCats(state.data.categories).forEach((c) => {
       const node = buildCatNode(c, 1);
       if (node) { wrap.appendChild(node.el); anyVisible = true; }
     });
