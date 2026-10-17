@@ -286,7 +286,11 @@ functions/
   api/upload.js      # POST 上传图片 -> R2
   api/visit.js       # POST 访问统计
   api/config.js      # GET/POST 配置
-  api/auth/          # 鉴权子目录：index(状态)/login/logout/setup/verify
+  api/favorites.js   # GET/POST 常用收藏（登录后跟账号走，KV 键 fav:<用户名>）
+  api/accounts/      # 账户管理：index(列表) / [id](审核·禁用·提权·删除)
+  api/applications/  # 收录申请：index(列表·提交) / [id](审核·撤回·删除)
+  api/auth/          # 鉴权子目录：index(状态)/login/logout/setup/verify/register/me
+  _accounts.js       # 账户与申请的共享逻辑（密码哈希/身份解析/权限判定）
   uploads/[name].js  # GET 从 R2 提供上传文件
 wrangler.toml.example # 仅本地开发模板（不入库为 wrangler.toml，以免禁用后台绑定界面）
 .wranglerignore      # 部署时排除 config.json / node_modules / scripts / .git

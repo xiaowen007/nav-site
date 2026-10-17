@@ -129,6 +129,9 @@ function authUser(req) {
  */
 const ACCOUNTS_FILE = path.join(ROOT, 'data', 'accounts.json');
 const APPS_FILE = path.join(ROOT, 'data', 'applications.json');
+// 常用收藏（账号维度）：{ "<username>": [ {url,name,desc,icon,at}, ... ] }
+// 线上对应 KV 键 `fav:<username>`，一个账号一份；本地合成一个文件，行为等价。
+const FAVORITES_FILE = path.join(ROOT, 'data', 'favorites.json');
 const PBKDF2_ITER = 100000;
 
 const ROLE_ADMIN = 'admin';
@@ -162,6 +165,39 @@ function loadApps() {
   return Array.isArray(l) ? l : [];
 }
 function saveApps(list) { writeJSONSafe(APPS_FILE, list || []); }
+
+/* 收藏存储 + 入库清洗（与 functions/api/favorites.js 的 sanitizeItems 保持一致：
+ * 白名单字段、限长、按 url 去重、上限 300 条。改一边请同步改另一边） */
+const MAX_FAV_ITEMS = 300;
+function sanitizeFavItems(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const it of raw.slice(0, MAX_FAV_ITEMS * 2)) {
+    if (!it || typeof it !== 'object') continue;
+    const url = String(it.url || '').trim().slice(0, 500);
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    out.push({
+      url,
+      name: String(it.name || url).trim().slice(0, 100) || url,
+      desc: String(it.desc || '').trim().slice(0, 200),
+      icon: String(it.icon || '').trim().slice(0, 500),
+      at: Number(it.at) > 0 ? Math.floor(Number(it.at)) : 0
+    });
+    if (out.length >= MAX_FAV_ITEMS) break;
+  }
+  return out;
+}
+function loadFavorites() {
+  const v = readJSONSafe(FAVORITES_FILE, {});
+  return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+}
+function saveFavoritesFor(user, items) {
+  const all = loadFavorites();
+  all[user] = items;
+  writeJSONSafe(FAVORITES_FILE, all);
+}
 
 /* 密码派生：PBKDF2-SHA256，100k 次迭代；库里只存 salt + 派生值，绝不存明文 */
 function randomHex(n) { return crypto.randomBytes(n).toString('hex'); }
@@ -907,6 +943,24 @@ const server = http.createServer(async (req, res) => {
         nickname: (id.account && id.account.nickname) || id.user,
         super: !!id.super
       });
+    }
+
+    /* ---------- 常用收藏（账号维度，与 functions/api/favorites.js 等价） ---------- */
+    if (pathname === '/api/favorites') {
+      const id = resolveIdentity(req);
+      if (!id) return sendJSON(res, 401, { error: '请先登录', needAuth: true });
+      if (req.method === 'GET') {
+        const all = loadFavorites();
+        const items = Array.isArray(all[id.user]) ? all[id.user] : [];
+        return sendJSON(res, 200, { ok: true, user: id.user, items, count: items.length });
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        const items = sanitizeFavItems(body && body.items);
+        if (!items) return sendJSON(res, 400, { error: 'items 必须是数组' });
+        saveFavoritesFor(id.user, items);
+        return sendJSON(res, 200, { ok: true, user: id.user, count: items.length, savedAt: Date.now() });
+      }
     }
 
     /* ---------- 账户管理（仅管理员） ---------- */

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610161923" />
+  <link rel="stylesheet" href="css/style.css?v=202610170939" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -57,10 +57,12 @@
     </div>
 
     <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
-    <button class="acct-btn" id="acctBtn" title="登录 / 注册 / 我的申请">
+    <!-- 右上角只留这一个入口：登录前它是「登录」，登录后变成昵称。
+         AI 收录 / 管理后台不再单列按钮，收进「我的账户」弹窗（#goAdmin），
+         这样顶栏少一个按钮，收录入口也天然要求先登录，避免点进去再被后台拦一次。 -->
+    <button class="acct-btn" id="acctBtn" title="登录 / 注册（登录后常用收藏会跟账号走，多设备同步）">
       <span id="acctIcon">👤</span><span class="acct-txt" id="acctTxt">登录</span>
     </button>
-    <a class="admin-link" href="admin.html" title="AI 自动收录 / 管理">＋<span class="al-txt"> AI 收录</span></a>
   </header>
 
   <div class="layout">
@@ -128,6 +130,9 @@
           <input type="password" id="loginPwd" name="password" placeholder="密码" autocomplete="current-password" />
           <label class="chk"><input type="checkbox" id="loginRemember" checked /> 记住登录（30 天）</label>
           <button class="btn primary block" id="doLogin" type="button">登录</button>
+          <!-- 顶栏的「AI 收录」按钮已并入这里，登录弹窗里就说清楚登录能得到什么 -->
+          <p class="hint">登录后：常用收藏跟账号走（换设备自动同步）、可提交网站收录申请；
+            管理员登录后可在「我的账户」里直接进入后台批量收录。</p>
           <p class="modal-msg" id="loginMsg"></p>
         </form>
       </div>
@@ -156,8 +161,11 @@
     <div class="modal wide" role="dialog" aria-modal="true" aria-label="我的账户">
       <button class="modal-x" id="userX" title="关闭">✕</button>
       <h4 class="modal-title">我的账户 <span class="who" id="userWho"></span></h4>
+      <!-- 收藏同步状态：登录后由 app.js 的 renderFavSyncNote() 填文案，未登录整行隐藏。
+           放在最上面是因为它回答的是「我收藏的东西还在不在」这个最先被关心的问题。 -->
+      <p class="fav-sync-note" id="favSyncNote" hidden></p>
       <div class="modal-actions">
-        <button class="btn sm ghost" id="goAdmin" type="button" hidden>进入后台</button>
+        <button class="btn sm primary" id="goAdmin" type="button" hidden>＋ AI 收录 / 管理后台</button>
         <button class="btn sm ghost" id="doLogout" type="button">退出登录</button>
       </div>
 
@@ -186,9 +194,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202610161923"></script>
-  <script src="js/logos.js?v=202610161923"></script>
-  <script src="js/totop.js?v=202610161923"></script>
-  <script src="js/app.js?v=202610161923"></script>
+  <script src="js/lunar.js?v=202610170939"></script>
+  <script src="js/logos.js?v=202610170939"></script>
+  <script src="js/totop.js?v=202610170939"></script>
+  <script src="js/app.js?v=202610170939"></script>
 </body>
 </html>

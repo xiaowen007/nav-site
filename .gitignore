@@ -10,6 +10,7 @@ config.json
 # 线上对应的数据存在 Cloudflare KV（键 accounts / applications），与本文件无关
 data/accounts.json
 data/applications.json
+data/favorites.json
 
 # ── 系统 / 日志 ──
 .DS_Store

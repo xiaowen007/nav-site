@@ -20,21 +20,35 @@
   const COLORS = ['#2f6fed','#e8543f','#1aa179','#f0a020','#8b5cf6','#0ea5e9','#ef5da8','#14b8a6'];
   const colorFor = (s) => COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
 
-  /* ===== 常用收藏（localStorage，按浏览器保存） ===== */
+  /* ===== 常用收藏（未登录存本地 / 已登录跟账号走） =====
+   * 用**两个 localStorage key**分开存，不要合并成一个：
+   *   · 未登录 —— `nav_favorites`，纯浏览器本地，换人用同一台电脑也看不到上一个人的收藏；
+   *   · 已登录 —— `nav_favorites@<用户名>` 作为本地缓存，真正的数据源是云端 /api/favorites。
+   * 登录那一刻把「本机未登录那份」与「云端那份」取并集（见 syncFavoritesOnLogin），
+   * 之后任何改动都防抖上传，实现多端多浏览器同步。
+   */
   const FAV_KEY = 'nav_favorites';
-  function getFavorites() {
-    try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; }
+  const favKey = () => (acct.loggedIn && acct.user ? FAV_KEY + '@' + acct.user : FAV_KEY);
+  function readFav(key) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return Array.isArray(v) ? v : []; }
     catch { return []; }
   }
+  function writeFav(key, arr) {
+    try { localStorage.setItem(key, JSON.stringify(arr)); } catch (e) {}
+  }
+  function getFavorites() { return readFav(favKey()); }
   function saveFavorites(arr) {
-    try { localStorage.setItem(FAV_KEY, JSON.stringify(arr)); } catch (e) {}
+    writeFav(favKey(), arr);
+    queueFavSync();          // 未登录时是空操作，纯本地
   }
   function isFav(url) { return getFavorites().some((f) => f.url === url); }
   function toggleFav(link) {
     const favs = getFavorites();
     const i = favs.findIndex((f) => f.url === link.url);
+    // 新收藏带上时间戳：多端合并时按它排序，否则另一端拿到的是"无时间的旧数据"，
+    // 顺序会随合并次数漂移。
     if (i >= 0) favs.splice(i, 1);
-    else favs.unshift(link); // 新收藏置顶
+    else favs.unshift(Object.assign({}, link, { at: Date.now() })); // 新收藏置顶
     saveFavorites(favs);
   }
   function updateFavCount() {
@@ -55,8 +69,107 @@
     const toIdx = favs.findIndex((f) => f.url === toUrl);
     if (toIdx < 0) favs.push(item);
     else favs.splice(toIdx, 0, item);
+    // 拖拽顺序也要能让别的设备认账：按下标重写 at（越靠前越"新"），
+    // 否则一端手排的顺序，到了另一端会被按旧的 at 重新排回去。
+    const now = Date.now();
+    favs.forEach((f, idx) => { f.at = now - idx; });
     saveFavorites(favs);
     renderFavorites();
+  }
+
+  /* ===== 收藏的账号同步 =====
+   * 设计原则：同步**永远不能**成为浏览的阻塞点或错误来源。
+   * 未登录不请求；任何失败都静默降级成本地存储，本地那份绝不因此被清空。
+   */
+  let favSyncState = 'idle';   // idle | ok | local(未绑定存储) | auth(登录失效) | error
+  let favSyncTimer = null;
+
+  function queueFavSync() {
+    if (!acct.loggedIn) return;
+    clearTimeout(favSyncTimer);
+    favSyncTimer = setTimeout(() => { pushFavorites(); }, 700);
+  }
+
+  async function pushFavorites() {
+    if (!acct.loggedIn) return;
+    try {
+      await apiAuth('/api/favorites', 'POST', { items: getFavorites() });
+      favSyncState = 'ok';
+    } catch (e) {
+      favSyncState = (e.status === 401) ? 'auth' : (e.status === 503 ? 'local' : 'error');
+    }
+    renderFavSyncNote();
+  }
+
+  /* 并集合并：按 url 去重，有 `at` 的按时间倒序（新的在前），
+   * 没有 at 的老数据（历史版本存下来的）视为最旧、保持原有相对顺序。
+   * 用「时间」而不是「谁在参数里靠前」是为了让两端各自合并的结果一致 —— 
+   * 否则 A 端算出来 [x,y]、B 端算出来 [y,x]，两边会一直互相覆盖。 */
+  function mergeFavs(a, b) {
+    const seen = new Set();
+    const out = [];
+    [...(a || []), ...(b || [])].forEach((it) => {
+      if (!it || !it.url || seen.has(it.url)) return;
+      seen.add(it.url);
+      out.push(it);
+    });
+    return out
+      .map((it, i) => ({ it, i, at: Number(it.at) > 0 ? Number(it.at) : 0 }))
+      .sort((x, y) => (y.at - x.at) || (x.i - y.i))
+      .map((x) => x.it);
+  }
+
+  /* 登录后调用（手动登录 & 刷新时检测到已登录，两条路都要走这里） */
+  async function syncFavoritesOnLogin() {
+    if (!acct.loggedIn || !acct.user) return;
+    const mine = favKey();                        // nav_favorites@<user>
+    const localMine = readFav(mine);
+    const localAnon = readFav(FAV_KEY);            // 这台浏览器未登录时攒的那份
+    const seed = mergeFavs(localMine, localAnon);
+
+    let cloud = [];
+    try {
+      const r = await apiAuth('/api/favorites');
+      cloud = Array.isArray(r.items) ? r.items : [];
+      favSyncState = 'ok';
+    } catch (e) {
+      favSyncState = (e.status === 401) ? 'auth' : (e.status === 503 ? 'local' : 'error');
+      // 云端不可用：退化成"这台浏览器自己同步"，绝不丢掉本地那份
+      writeFav(mine, seed);
+      refreshFavViews();
+      return;
+    }
+
+    const merged = mergeFavs(cloud, seed);
+    writeFav(mine, merged);
+    refreshFavViews();
+    // 合并结果与云端不一致（本地有云端没有的，或顺序变了）才回写，省一次无谓的写
+    if (JSON.stringify(merged) !== JSON.stringify(cloud)) await pushFavorites();
+  }
+
+  function refreshFavViews() {
+    updateFavCount();
+    renderTopFavorites();
+    if (state.view === 'fav' && state.data) renderFavorites();
+    renderFavSyncNote();
+  }
+
+  /* 用户中心里的那行同步状态说明（未登录时整行隐藏） */
+  function renderFavSyncNote() {
+    const el = document.getElementById('favSyncNote');
+    if (!el) return;
+    if (!acct.loggedIn) { el.hidden = true; el.textContent = ''; return; }
+    const n = getFavorites().length;
+    const head = '⭐ 常用收藏 ' + n + ' 个 · ';
+    const tail = {
+      idle: '正在与账号同步…',
+      ok: '已同步到账号，换设备或换浏览器登录即可看到',
+      local: '仅保存在本机（服务端未开启收藏同步）',
+      auth: '仅保存在本机（登录状态已失效，请重新登录）',
+      error: '暂时无法同步，已保存在本机'
+    }[favSyncState] || '已保存在本机';
+    el.hidden = false;
+    el.textContent = head + tail;
   }
 
   function hostnameOf(url) {
@@ -1029,6 +1142,7 @@
   function renderTopFavorites() {
     const box = $('#favTop');
     if (!box) return;
+    if (!state.data) return;   // 数据还没到就别渲染：登录时同步收藏会提前触发到这里
     const s = state.data.site || {};
 
     if (s.showFavorites === false || state.view === 'fav') {
@@ -1080,7 +1194,12 @@
     } else {
       const hint = document.createElement('span');
       hint.className = 'fav-hint';
-      hint.textContent = kw ? '已按搜索词筛选' : '点卡片右上角的 ☆ 可取消收藏';
+      // 收藏同步是"看不见的功能"：不在用户看收藏的这个地方说一句，
+      // 他永远不会知道登录之后收藏能跟着账号走到别的设备（用户中心只有登录后才看得到）。
+      const syncTip = acct.loggedIn
+        ? (favSyncState === 'ok' ? '已同步到账号' : '仅保存在本机')
+        : '登录后可多设备同步';
+      hint.textContent = kw ? '已按搜索词筛选' : '点 ☆ 可取消收藏 · ' + syncTip;
       head.appendChild(hint);
     }
 
@@ -1320,6 +1439,9 @@
     catch (e) { /* 离线 / 未部署 Functions：按未登录处理，不影响浏览 */ }
     renderAcctBtn();
     fillApplyCategories();
+    // 刷新时就已登录（记住登录 30 天）：同样要拉一次云端收藏并合并，
+    // 否则换台设备刷新进来会看到"收藏没了" —— 本地缓存是空的，云端那份还没下来。
+    if (acct.loggedIn) syncFavoritesOnLogin();
   }
   function renderAcctBtn() {
     const btn = $('#acctBtn'), txt = $('#acctTxt'), icon = $('#acctIcon');
@@ -1328,12 +1450,13 @@
       btn.classList.add('logged');
       if (txt) txt.textContent = acct.nickname || acct.user;
       if (icon) icon.textContent = acct.isAdmin ? '🛡️' : '👤';
-      btn.title = (acct.isAdmin ? '管理员' : '普通用户') + '：' + acct.user + '（点击打开我的账户）';
+      btn.title = (acct.isAdmin ? '管理员' : '普通用户') + '：' + acct.user +
+        '（点击打开我的账户：收录网站 / 收藏同步 / 退出登录）';
     } else {
       btn.classList.remove('logged');
       if (txt) txt.textContent = '登录';
       if (icon) icon.textContent = '👤';
-      btn.title = '登录 / 注册';
+      btn.title = '登录 / 注册（登录后常用收藏会跟账号走，多设备同步）';
     }
   }
   // 申请表单里的「建议分类」用现有分类填充，避免用户凭空造分类
@@ -1411,6 +1534,9 @@
       // 登录会打开用户中心弹窗、正文不再是用户刚才看的东西；
       // 若此前停在收藏视图，这里统一退回「全部分类」，避免登录后正文只剩收藏区块。
       if (state.view === 'fav') showAllSections();
+      // 拉云端收藏并和本机那份取并集（不 await：先让弹窗出来，同步结果通过
+      // 用户中心里的那行状态文字回显，网络慢时不至于点一下登录要等两秒才响应）
+      syncFavoritesOnLogin().catch(() => {});
       openUserCenter();
     } catch (e) {
       maskMsg($('#loginMsg'), '网络错误：' + e.message, 'err');
@@ -1451,6 +1577,10 @@
     if (who) who.textContent = (acct.nickname || acct.user || '') + (acct.isAdmin ? '（管理员）' : '（普通用户）');
     const ga = $('#goAdmin');
     if (ga) ga.hidden = !acct.isAdmin;   // 普通用户不显示后台入口
+    // 顶栏的「登录」与「AI 收录」已合并成这一个按钮，后台入口就落在这个弹窗里，
+    // 所以按钮文案要写清楚它是去"收录"的，而不只是"看看后台"。
+    if (ga) ga.textContent = '＋ AI 收录 / 管理后台';
+    renderFavSyncNote();
     fillApplyCategories();
     openMask($('#userMask'));
     loadMyApps();
@@ -1530,11 +1660,16 @@
 
   function doLogout() {
     setToken('');
+    // 取消还没发出去的同步（700ms 防抖窗口内的那次），否则退出后还会往刚登出的账号写一份
+    clearTimeout(favSyncTimer);
     acct = { loggedIn: false, user: null, role: null, isAdmin: false };
+    favSyncState = 'idle';
     renderAcctBtn();
     closeMask($('#userMask'));
     // 退出登录同样把正文还原成分类浏览，避免残留收藏视图
     if (state.view === 'fav') showAllSections();
+    // 收藏切回「这台浏览器本地」那份：账号里的收藏不该留给下一个访客看
+    refreshFavViews();
   }
 
   /* ===== 加载失败 / 卡住时，必须让用户看见原因 =====
