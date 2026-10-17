@@ -244,6 +244,9 @@
     renderSections();
     applySettings();
     updateFavCount();
+    // 申请弹窗的「建议分类」下拉依赖现有分类：数据晚到时补一次，
+    // 否则先打开弹窗再等到数据的场景下拉里只有占位项。
+    fillApplyCategories();
   }
 
   if (PREVIEW_MODE) {
@@ -1478,6 +1481,38 @@
     if (pr) pr.classList.toggle('hidden', isLogin);
   }
 
+  /* ===== 申请添加网站（未登录也能提交） =====
+   * 表单 DOM 只有一份（#applyMask），三个入口共用：
+   *   ① 顶栏「申请收录」按钮   ② 登录弹窗里的那行文字按钮   ③ 我的账户里的按钮
+   * 之前表单嵌在用户中心弹窗里，等于必须先注册登录才能申请 —— 访问者最常见的
+   * 诉求恰恰是"我还没账号，就想先把站点加进去"，所以抽成独立弹窗。
+   */
+  let pendingApply = false;   // 从申请弹窗点「去登录」，登录成功后回到申请弹窗
+
+  function openApply() {
+    fillApplyCategories();
+    renderApplyHint();
+    maskMsg($('#applyMsg'), '');
+    openMask($('#applyMask'));
+    // 桌面端直接聚焦到网址输入框，少一次点击
+    const u = $('#appUrl');
+    if (u) { try { u.focus(); } catch (e) {} }
+  }
+
+  function renderApplyHint() {
+    const hint = $('#applyHint'), goLogin = $('#applyGoLogin');
+    if (!hint) return;
+    if (acct.loggedIn) {
+      hint.textContent = '已登录为 ' + (acct.nickname || acct.user) + '：提交后可在「我的账户」里查看审核进度、撤回待审申请。';
+      hint.className = 'apply-hint ok';
+      if (goLogin) goLogin.hidden = true;
+    } else {
+      hint.textContent = '无需登录即可提交，管理员审核通过后会自动收录到导航里。登录后能查看审核进度、撤回申请。';
+      hint.className = 'apply-hint';
+      if (goLogin) goLogin.hidden = false;
+    }
+  }
+
   function bindAccountUI() {
     const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
 
@@ -1485,6 +1520,24 @@
       if (acct.loggedIn) openUserCenter();
       else { switchAuthTab('login'); openMask($('#authMask')); }
     });
+
+    /* ---- 申请添加网站：三个入口 + 关闭 ---- */
+    on('#applyBtn', 'click', openApply);                 // 顶栏「＋ 申请收录」
+    on('#applyOpen', 'click', openApply);                // 我的账户里
+    on('#applyFromAuth', 'click', () => {                // 登录弹窗里（未登录最关键的一条路）
+      closeMask($('#authMask'));
+      openApply();
+    });
+    on('#applyX', 'click', () => closeMask($('#applyMask')));
+    on('#applyMask', 'click', (e) => { if (e.target === $('#applyMask')) closeMask($('#applyMask')); });
+    // 申请弹窗里点「去登录」：记住来源，登录成功后回到申请弹窗，而不是把用户丢进用户中心
+    on('#applyGoLogin', 'click', () => {
+      pendingApply = true;
+      closeMask($('#applyMask'));
+      switchAuthTab('login');
+      openMask($('#authMask'));
+    });
+
     on('#authX', 'click', () => closeMask($('#authMask')));
     on('#userX', 'click', () => closeMask($('#userMask')));
     // 点遮罩空白处关闭
@@ -1492,7 +1545,7 @@
     on('#userMask', 'click', (e) => { if (e.target === $('#userMask')) closeMask($('#userMask')); });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      closeMask($('#authMask')); closeMask($('#userMask'));
+      closeMask($('#authMask')); closeMask($('#userMask')); closeMask($('#applyMask'));
     });
 
     on('#tabLogin', 'click', () => switchAuthTab('login'));
@@ -1537,7 +1590,9 @@
       // 拉云端收藏并和本机那份取并集（不 await：先让弹窗出来，同步结果通过
       // 用户中心里的那行状态文字回显，网络慢时不至于点一下登录要等两秒才响应）
       syncFavoritesOnLogin().catch(() => {});
-      openUserCenter();
+      // 从申请弹窗跳来登录的，登录完回申请弹窗继续填；否则照旧进用户中心
+      if (pendingApply) { pendingApply = false; openApply(); }
+      else openUserCenter();
     } catch (e) {
       maskMsg($('#loginMsg'), '网络错误：' + e.message, 'err');
     } finally {
@@ -1582,6 +1637,7 @@
     if (ga) ga.textContent = '＋ AI 收录 / 管理后台';
     renderFavSyncNote();
     fillApplyCategories();
+    renderApplyHint();
     openMask($('#userMask'));
     loadMyApps();
   }
@@ -1600,11 +1656,12 @@
           b.disabled = true;
           try {
             await apiAuth('/api/applications/' + encodeURIComponent(b.getAttribute('data-withdraw')), 'PATCH', { action: 'withdraw' });
-            maskMsg($('#applyMsg'), '已撤回', 'ok');
+            // 提示归到「我的申请」自己这块（#myAppsMsg），别去改申请弹窗里那行
+            maskMsg($('#myAppsMsg'), '已撤回', 'ok');
             loadMyApps();
           } catch (e) {
             b.disabled = false;
-            maskMsg($('#applyMsg'), e.message, 'err');
+            maskMsg($('#myAppsMsg'), e.message, 'err');
           }
         });
       });
@@ -1645,11 +1702,15 @@
       const r = await apiAuth('/api/applications', 'POST', body);
       maskMsg($('#applyMsg'), r.message || '已提交，等待管理员审核', 'ok');
       ['#appUrl', '#appName', '#appDesc'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
-      loadMyApps();
+      // 建议分类保留上一次的选择：连提交同一个分类下的几个站很常见
+      if (r.guest) renderApplyHint();   // 游客提交后提示语不变，但确保「去登录」还挂着
+      if (acct.loggedIn) loadMyApps();
     } catch (e) {
       if (e.status === 401) {
-        maskMsg($('#applyMsg'), '登录已失效，请重新登录', 'err');
-        setToken(''); acct = { loggedIn: false }; renderAcctBtn();
+        // 现在是免登录也能提交，401 只可能出现在「token 已失效」的场景：
+        // 把本地残留的凭证清掉，按游客状态再提交一次，别让用户卡在这里。
+        setToken(''); acct = { loggedIn: false }; renderAcctBtn(); renderApplyHint();
+        maskMsg($('#applyMsg'), '登录状态已失效，已切换为免登录提交，请再点一次「提交申请」', 'err');
       } else {
         maskMsg($('#applyMsg'), e.message, 'err');
       }
@@ -1665,6 +1726,7 @@
     acct = { loggedIn: false, user: null, role: null, isAdmin: false };
     favSyncState = 'idle';
     renderAcctBtn();
+    renderApplyHint();       // 退出后申请弹窗若还开着，提示要变回「免登录可提交」
     closeMask($('#userMask'));
     // 退出登录同样把正文还原成分类浏览，避免残留收藏视图
     if (state.view === 'fav') showAllSections();

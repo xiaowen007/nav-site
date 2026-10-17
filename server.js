@@ -144,6 +144,15 @@ const ST_REJECTED = 'rejected';
 const STATUS_TEXT = { pending: '待审核', active: '正常', disabled: '已禁用', rejected: '未通过' };
 const MAX_ACCOUNTS = 500;
 const MAX_PENDING_PER_USER = 5;
+const MAX_PENDING_PER_GUEST = 3;
+const GUEST_NAME = '游客（未登录）';
+
+/* 游客限流用的来源 IP（本地同构实现）：只用于服务端计数，publicApp() 白名单输出不含 ip */
+function guestIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const raw = fwd || req.headers['x-real-ip'] || (req.socket && req.socket.remoteAddress) || '';
+  return String(raw).replace(/^::ffff:/, '').slice(0, 60);
+}
 
 function readJSONSafe(file, fallback) {
   try {
@@ -1063,17 +1072,24 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // POST /api/applications -> 提交「添加网站」申请
+    // POST /api/applications -> 提交「添加网站」申请（未登录也能提交，与线上 Functions 同构）
     if (pathname === '/api/applications' && req.method === 'POST') {
       const me = resolveIdentity(req);
-      if (!me) return sendJSON(res, 401, { error: '请先登录后再提交申请', needLogin: true });
+      const guest = !me;
       const body = await readBody(req);
       const target = normalizeUrl(body && body.url);
       if (!target) return sendJSON(res, 400, { error: '请填写合法的网址（如 https://example.com）' });
 
       const list = loadApps();
-      const mine = list.filter((a) => a.username === me.user && a.status === ST_PENDING);
-      if (mine.length >= MAX_PENDING_PER_USER) {
+      const ip = guest ? guestIp(req) : '';
+      const mine = guest
+        ? list.filter((a) => a.status === ST_PENDING && a.guest && a.ip && a.ip === ip)
+        : list.filter((a) => a.username === me.user && a.status === ST_PENDING);
+      if (guest) {
+        if (ip && mine.length >= MAX_PENDING_PER_GUEST) {
+          return sendJSON(res, 429, { error: '提交太频繁：未登录时最多同时挂 ' + MAX_PENDING_PER_GUEST + ' 条待审申请，登录后可提交更多' });
+        }
+      } else if (mine.length >= MAX_PENDING_PER_USER) {
         return sendJSON(res, 429, { error: '你还有 ' + mine.length + ' 条申请在等待审核，请等管理员处理后再提交' });
       }
       if (mine.some((a) => a.url === target)) {
@@ -1100,13 +1116,21 @@ const server = http.createServer(async (req, res) => {
 
       const app = {
         id: newId('a'), kind: 'link',
-        username: me.user, nickname: (me.account && me.account.nickname) || me.user,
+        username: guest ? '' : me.user,
+        nickname: guest ? GUEST_NAME : ((me.account && me.account.nickname) || me.user),
+        guest: !!guest,
+        ...(guest ? { ip } : {}),
         name, url: target, desc, icon, category,
         status: ST_PENDING, createdAt: Date.now(), reviewedAt: 0, reviewer: '', note: ''
       };
       list.push(app);
       saveApps(list);
-      return sendJSON(res, 200, { ok: true, pending: true, application: publicApp(app), message: '已提交，等待管理员审核' });
+      return sendJSON(res, 200, {
+        ok: true, pending: true, guest: !!guest, application: publicApp(app),
+        message: guest
+          ? '已提交，等待管理员审核。登录后可在「我的账户」里查看审核进度'
+          : '已提交，等待管理员审核'
+      });
     }
 
     // PATCH /api/applications/:id -> 管理员审核（通过则自动收录）；用户可撤回自己的待审申请

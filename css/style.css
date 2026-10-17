@@ -1028,6 +1028,28 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
 .acct-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--glass-hover); }
 .acct-btn.logged { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 
+/* 顶栏「＋ 申请收录」：与登录按钮同尺寸并排，但用主色描边 + 主色文字，
+   让它看起来是「可以做一件事」而不是又一个栏目链接。 */
+.apply-btn {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.apply-btn:hover { background: var(--glass-hover); }
+
+/* 弹窗里的文字按钮（登录弹窗的申请入口 / 申请弹窗的「去登录」）：
+   不像按钮、也不抢 tab 的视觉层级，但 hover 有下划线，看得出可点。 */
+.apply-link {
+  display: inline-block; width: 100%; margin: 2px 0 0; padding: 4px 2px;
+  border: 0; background: none; cursor: pointer; text-align: left;
+  color: var(--primary); font-size: 12.5px; font-family: var(--font-family);
+}
+.apply-link:hover { text-decoration: underline; }
+
+/* 申请弹窗底部的登录态说明：未登录 = 灰色说明，已登录 = 绿色一行 */
+.apply-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.apply-hint.ok { color: #1a9d5a; }
+
 /* 弹窗骨架 */
 [hidden] { display: none !important; }
 .modal-mask {

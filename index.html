@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610170939" />
+  <link rel="stylesheet" href="css/style.css?v=202610171010" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -57,11 +57,17 @@
     </div>
 
     <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
-    <!-- 右上角只留这一个入口：登录前它是「登录」，登录后变成昵称。
+    <!-- 右上角只留这两个入口：登录/账户，以及它右侧的「申请收录」。
          AI 收录 / 管理后台不再单列按钮，收进「我的账户」弹窗（#goAdmin），
          这样顶栏少一个按钮，收录入口也天然要求先登录，避免点进去再被后台拦一次。 -->
     <button class="acct-btn" id="acctBtn" title="登录 / 注册（登录后常用收藏会跟账号走，多设备同步）">
       <span id="acctIcon">👤</span><span class="acct-txt" id="acctTxt">登录</span>
+    </button>
+    <!-- 「申请添加网站」独立入口：点一下直接开表单，不需要先登录。
+         与登录按钮并排，是因为访问者第一反应往往是"我想把这个站加进去"，
+         而不是"我要注册个账号"。 -->
+    <button class="acct-btn apply-btn" id="applyBtn" title="申请添加网站（无需登录，提交后由管理员审核）">
+      <span aria-hidden="true">＋</span><span class="acct-txt">申请收录</span>
     </button>
   </header>
 
@@ -117,6 +123,11 @@
         <button class="mtab active" id="tabLogin" type="button">登录</button>
         <button class="mtab" id="tabRegister" type="button">注册</button>
       </div>
+      <!-- 登录 / 注册两个 tab 下都常驻这一行：没有账号也能申请收录。
+           做成文字按钮而不是又一个 tab，避免和「登录/注册」抢视觉层级。 -->
+      <button class="apply-link" id="applyFromAuth" type="button">
+        <span aria-hidden="true">＋</span> 申请添加网站（无需登录，审核通过后收录）
+      </button>
 
       <div class="mpane" id="paneLogin">
         <!-- 这层 form 元素是刻意加的：给浏览器的密码管理器一个明确的作用域边界。
@@ -169,7 +180,23 @@
         <button class="btn sm ghost" id="doLogout" type="button">退出登录</button>
       </div>
 
+      <!-- 表单本体搬到了独立的 #applyMask 弹窗（未登录、顶栏、登录弹窗三个入口共用同一份
+           DOM），这里只留一个打开的按钮，避免同一套 id 出现两份。 -->
       <h5 class="sub">申请添加网站</h5>
+      <button class="btn sm primary block" id="applyOpen" type="button">＋ 申请添加网站</button>
+      <p class="hint">提交后在这里查看审核进度，待审的申请可以自行撤回。</p>
+
+      <h5 class="sub">我的申请</h5>
+      <div class="apply-list" id="myApps"><p class="hint">暂无申请记录</p></div>
+      <p class="modal-msg" id="myAppsMsg"></p>
+    </div>
+  </div>
+
+  <!-- 申请添加网站弹窗（未登录也能打开：顶栏「申请收录」/ 登录弹窗 / 我的账户 三个入口共用） -->
+  <div class="modal-mask" id="applyMask" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="申请添加网站">
+      <button class="modal-x" id="applyX" title="关闭">✕</button>
+      <h4 class="modal-title">申请添加网站</h4>
       <div class="apply-form">
         <input type="text" id="appUrl" name="apply-url" placeholder="网址（如 example.com）" autocomplete="off" />
         <input type="text" id="appName" name="apply-name" placeholder="名称（留空自动抓取）" autocomplete="off" />
@@ -178,9 +205,10 @@
         <button class="btn primary" id="doApply" type="button">提交申请</button>
       </div>
       <p class="modal-msg" id="applyMsg"></p>
-
-      <h5 class="sub">我的申请</h5>
-      <div class="apply-list" id="myApps"><p class="hint">暂无申请记录</p></div>
+      <!-- 未登录时提示「不用登录也能提交 + 去登录的好处」，登录后换成查看进度的说明。
+           文案由 app.js 的 renderApplyHint() 按登录态填。 -->
+      <p class="apply-hint" id="applyHint"></p>
+      <button class="apply-link" id="applyGoLogin" type="button">已有账号？登录后可在「我的账户」查看审核进度 →</button>
     </div>
   </div>
 
@@ -194,9 +222,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202610170939"></script>
-  <script src="js/logos.js?v=202610170939"></script>
-  <script src="js/totop.js?v=202610170939"></script>
-  <script src="js/app.js?v=202610170939"></script>
+  <script src="js/lunar.js?v=202610171010"></script>
+  <script src="js/logos.js?v=202610171010"></script>
+  <script src="js/totop.js?v=202610171010"></script>
+  <script src="js/app.js?v=202610171010"></script>
 </body>
 </html>
