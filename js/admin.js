@@ -602,12 +602,15 @@
       if (state.sel.has(i)) tr.classList.add('sel');
       tr.innerHTML = `
         <td class="col-chk"><input type="checkbox" class="selbox" data-i="${i}" ${state.sel.has(i) ? 'checked' : ''}/></td>
-        <td><input data-f="name" data-i="${i}" value="${esc(l.name)}" placeholder="名称"/></td>
-        <td><input data-f="url" data-i="${i}" value="${esc(l.url)}" placeholder="https://"/></td>
-        <td class="col-desc"><input data-f="desc" data-i="${i}" value="${esc(l.desc)}" placeholder="简介"/></td>
+        <!-- size="1" 是刻意的：input 的 min-content 由 size 属性决定（默认 20 ≈ 180px），
+             会把 table-layout:fixed 的列再撑开一层，窄窗口时又把「操作/访问」列挤出面板。
+             width:100% 保证显示宽度仍填满单元格，size="1" 只把最小收缩下限打到最小。 -->
+        <td><input data-f="name" data-i="${i}" size="1" value="${esc(l.name)}" placeholder="名称"/></td>
+        <td><input data-f="url" data-i="${i}" size="1" value="${esc(l.url)}" placeholder="https://"/></td>
+        <td class="col-desc"><input data-f="desc" data-i="${i}" size="1" value="${esc(l.desc)}" placeholder="简介"/></td>
         <td class="col-icon">
           <div class="icon-cell">
-            <input data-f="icon" data-i="${i}" value="${esc(l.icon)}" placeholder="图标URL(留空自动)"/>
+            <input data-f="icon" data-i="${i}" size="1" value="${esc(l.icon)}" placeholder="图标URL(留空自动)"/>
             <div class="icon-btns">
               <button class="mini" data-act="autoicon" data-i="${i}" title="自动匹配 favicon">🪄</button>
               <button class="mini" data-act="uploadicon" data-i="${i}" title="上传图标">⬆</button>

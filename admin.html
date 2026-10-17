@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610171010" />
+  <link rel="stylesheet" href="css/style.css?v=202610171121" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -66,13 +66,35 @@
     .cat-arrow.collapsed { transform:rotate(-90deg); }
     .cat-arrow.placeholder { visibility:hidden; cursor:default; }
     .cat-item .lv-tag { flex:none; font-size:10px; line-height:1.6; padding:0 5px; border-radius:6px; color:var(--muted); background:var(--bg); border:1px solid var(--border); }
-    .link-pane { border:1px solid var(--border); border-radius:12px; padding:12px; min-width:0; }
+    .link-pane { border:1px solid var(--border); border-radius:12px; padding:12px; min-width:0; overflow-x:auto; }
+    /* 容器查询：按「表格面板自己的宽度」而不是窗口宽度决定隐藏哪些列。
+       1280 窗口下这个 pane 只有 539px，靠窗口断点（760px）根本兜不住，
+       只有按容器自身判断才准。 */
+    .link-pane { container-type: inline-size; }
     .link-tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-    table.grid { width:100%; border-collapse:collapse; font-size:13px; }
-    table.grid th { text-align:left; color:var(--muted); font-weight:600; font-size:12px; padding:6px 8px; border-bottom:1px solid var(--border); }
-    table.grid td { padding:5px 6px; border-bottom:1px solid var(--border); vertical-align:middle; }
-    table.grid input { padding:6px 8px; }
-    .row-actions { display:flex; gap:4px; white-space:nowrap; }
+    /* 列宽一律用百分比（Σ=100）：px 与 % 混用时 Chrome 按「各列指定宽度之和」
+       定表格宽，固定列（图标 140 / 访问 56 / 操作 100）在任何窗口都会把表格
+       顶宽、把右侧「操作 / 访问」列挤出面板（1280 实测溢出 405px）。
+       列顺序：1 复选 / 2 名称 / 3 网址 / 4 简介 / 5 图标 / 6 访问 / 7 操作。 */
+    table.grid { width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
+    table.grid th { text-align:left; color:var(--muted); font-weight:600; font-size:12px; padding:6px 8px; border-bottom:1px solid var(--border); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    table.grid td { padding:5px 6px; border-bottom:1px solid var(--border); vertical-align:middle; overflow:hidden; }
+    table.grid input { padding:6px 8px; width:100%; min-width:0; box-sizing:border-box; }
+    table.grid th:nth-child(1), table.grid td:nth-child(1) { width:5%; }
+    table.grid th:nth-child(2), table.grid td:nth-child(2) { width:22%; }
+    table.grid th:nth-child(3), table.grid td:nth-child(3) { width:22%; }
+    table.grid th:nth-child(4), table.grid td:nth-child(4) { width:12%; }
+    table.grid th:nth-child(5), table.grid td:nth-child(5) { width:13%; }
+    table.grid th:nth-child(6), table.grid td:nth-child(6) { width:8%; }
+    table.grid th:last-child, table.grid td:last-child { width:18%; }
+    @container (max-width: 660px) {
+      table.grid .col-desc, table.grid .col-icon { display: none; }
+    }
+    /* 行内操作：从"胶囊按钮"改成方形图标钮。原来 5px 10px 的左右内边距把
+       ↑/↓/✕ 这种单字符挤在一条空白中间，看着像"图标缩小了、横向间距很大"；
+       现在 26×26 实心方块、图标 14px、间距 3px，视觉更紧凑也更好点。 */
+    .row-actions { display:flex; gap:3px; white-space:nowrap; }
+    .row-actions .btn { width:26px; height:26px; padding:0; flex:none; display:inline-flex; align-items:center; justify-content:center; font-size:14px; line-height:1; border-radius:7px; }
     .thumb-sm { width:22px; height:22px; border-radius:6px; object-fit:contain; background:var(--bg); vertical-align:middle; }
     .saved-dot { font-size:12px; color:#1aa179; }
 
@@ -725,13 +747,17 @@
               <table class="grid">
                 <thead>
                   <tr>
+                    <!-- 列宽一律由 style.css 里的 table.grid th:nth-child(n) 管。
+                         这里原来写死了 inline width（名称 130 / 网址 190 / 图标 160 / 访问 64 /
+                         操作 110），行内样式优先级最高，任何响应式规则都盖不住它 —— 窄窗口时
+                         「操作 / 访问」列就是这么被挤出面板的。class 保留，容器查询要靠它们隐藏列。 -->
                     <th class="col-chk"><input type="checkbox" id="chkAll" title="全选 / 取消全选（当前筛选结果）" /></th>
-                    <th style="width:130px">名称</th>
-                    <th style="width:190px">网址</th>
+                    <th>名称</th>
+                    <th>网址</th>
                     <th class="col-desc">简介</th>
-                    <th class="col-icon" style="width:160px">图标</th>
-                    <th style="width:64px">访问</th>
-                    <th style="width:110px">操作</th>
+                    <th class="col-icon">图标</th>
+                    <th>访问</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody id="linkBody"></tbody>
@@ -1245,9 +1271,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202610171010"></script>
-  <script src="js/totop.js?v=202610171010"></script>
-  <script src="js/wallpapers.js?v=202610171010"></script>
-  <script src="js/admin.js?v=202610171010"></script>
+  <script src="js/logos.js?v=202610171121"></script>
+  <script src="js/totop.js?v=202610171121"></script>
+  <script src="js/wallpapers.js?v=202610171121"></script>
+  <script src="js/admin.js?v=202610171121"></script>
 </body>
 </html>

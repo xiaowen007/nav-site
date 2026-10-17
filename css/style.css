@@ -926,9 +926,9 @@ table.grid tbody tr[draggable="true"] { cursor: grab; }
 .drag-handle { color: var(--muted); cursor: grab; user-select: none; font-size: 13px; }
 
 /* 图标单元格：输入框 + 上传/自动匹配按钮 + 预览 */
-.icon-cell { display: flex; flex-direction: column; gap: 4px; }
+.icon-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .icon-cell .icon-row { display: flex; gap: 4px; align-items: center; }
-.icon-cell input { padding: 5px 7px; font-size: 12px; }
+.icon-cell input { padding: 5px 7px; font-size: 12px; width: 100%; min-width: 0; box-sizing: border-box; }
 .icon-btns { display: flex; gap: 3px; }
 .icon-btns .mini {
   border: 1px solid var(--border); background: var(--bg); color: var(--text);
