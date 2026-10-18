@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610171813" />
+  <link rel="stylesheet" href="css/style.css?v=202610181241" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -919,6 +919,13 @@
               <textarea id="setSubtitle" placeholder="请输入站点描述…"></textarea>
               <label class="hint">页脚描述</label>
               <input type="text" id="setFooter" name="site-footer" autocomplete="off" placeholder="页脚说明" />
+              <label class="hint">滚动公告（留空则隐藏公告栏）</label>
+              <textarea id="setAnnouncement" placeholder="每行一条公告。多条会自动轮播；单条文字过长会横向滚动。&#10;不限制字数，写多长都可以。"></textarea>
+              <p class="settings-hint" style="margin-top:6px">
+                公告栏显示在主页顶部（顶栏下方）并随页面吸顶。<b>每行一条公告</b>：
+                只写一行 = 横向滚动这一条；写多行 = 几行内容轮流展示。
+                字数不限，保存链路不截断。访问者可以在公告栏右侧点「✕」临时关掉（仅本次会话）。
+              </p>
 
               <h5>主页中心模块（正文顶部大标题）</h5>
               <label class="hint">中心名称（留空则沿用站点名称）</label>
@@ -1271,9 +1278,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202610171813"></script>
-  <script src="js/totop.js?v=202610171813"></script>
-  <script src="js/wallpapers.js?v=202610171813"></script>
-  <script src="js/admin.js?v=202610171813"></script>
+  <script src="js/logos.js?v=202610181241"></script>
+  <script src="js/totop.js?v=202610181241"></script>
+  <script src="js/wallpapers.js?v=202610181241"></script>
+  <script src="js/admin.js?v=202610181241"></script>
 </body>
 </html>

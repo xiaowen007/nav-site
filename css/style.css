@@ -509,6 +509,58 @@ a { color: inherit; text-decoration: none; }
 .card.dragging { opacity: .4; }
 .card.drop-over { box-shadow: inset 0 2px 0 var(--primary); }
 
+/* ===== 悬浮滚动公告栏 =====
+ * 位置：顶栏正下方、正文之上，随页面吸顶（sticky + top = --top-h，即顶栏实测高度，
+ *       由 app.js 的 syncTopHeight() 维护 —— 顶栏在 search-above / 换行时会变高，
+ *       写死 px 会与公告栏重叠）。
+ * 内容：后台「首页设置 → 站点信息 → 滚动公告」改，一个字都不限长。
+ *   单条文字超宽  → 横向无缝滚动（两份内容 + translateX(-50%)）
+ *   多条消息      → 纵向轮播，每条 3.6 秒
+ *   都够短        → 静态展示，不滚（避免一个短语来回晃）
+ * 没有公告或用户本次会话关过 → 整条 hidden。 */
+.announce-bar {
+  position: sticky; top: var(--top-h, 0px); z-index: 29;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; padding: 8px 12px;
+  border: 1px solid var(--glass-brd); border-radius: 12px;
+  background: var(--glass-2); color: var(--text);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  font-size: 13px; line-height: 1.6;
+  overflow: hidden;
+}
+.announce-bar[hidden] { display: none; }
+.announce-bar .ab-icon { flex: none; font-size: 15px; line-height: 1; }
+.announce-bar .ab-viewport { flex: 1; min-width: 0; overflow: hidden; }
+.announce-bar .ab-track { white-space: nowrap; }
+.announce-bar .ab-text { display: inline-block; }
+/* 横向滚动：两份内容，每份右侧留间距；动画走容器一半宽度实现无缝 */
+.announce-bar .ab-track.marquee { display: inline-block; }
+.announce-bar .ab-track.marquee .ab-text { padding-right: 4em; }
+.announce-bar .ab-track.marquee.play { animation: ab-marquee linear infinite; }
+.announce-bar .ab-track.marquee.play:hover, .announce-bar:hover .ab-track.marquee.play { animation-play-state: paused; }
+@keyframes ab-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+/* 纵向轮播：切换时淡入上移 */
+.announce-bar .ab-track.rotator .ab-text { animation: ab-rise .45s ease; }
+@keyframes ab-rise {
+  from { opacity: 0; transform: translateY(60%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* 关闭钮：暗色 / 浅色都保持可读 */
+.announce-bar .ab-close {
+  flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; line-height: 1;
+}
+.announce-bar .ab-close:hover { color: var(--text); background: var(--glass-hover); }
+/* 窄屏：图标收缩、字号略小，公告栏只占一行 */
+@media (max-width: 640px) {
+  .announce-bar { font-size: 12.5px; padding: 7px 10px; margin-bottom: 12px; }
+}
+
 /* 顶部「常用收藏」区块（常驻在 hero 与第一个分类之间）。
    结构与分类区块完全同款（.section / .section-head / .cards 全复用），
    这里只补三处：与下方分类的分隔、空态说明、以及「查看全部」按钮的位置。 */

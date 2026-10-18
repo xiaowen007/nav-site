@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610171813" />
+  <link rel="stylesheet" href="css/style.css?v=202610181241" />
 </head>
 <body>
   <!-- 顶栏（搜索引擎搜索已上移至此处） -->
@@ -101,6 +101,18 @@
         <h1 id="heroTitle">共享导航</h1>
         <p id="heroSub">智能多功能响应式导航</p>
       </section>
+
+      <!-- 悬浮滚动公告栏：内容来自后台「首页设置 → 站点信息 → 滚动公告」。
+           无公告（或用户关过）就整条 hidden；单条文字超宽时横向无缝滚动，
+           多条消息时纵向轮播；随页面吸顶在顶栏下方。 -->
+      <div class="announce-bar" id="announceBar" hidden>
+        <span class="ab-icon" aria-hidden="true">📢</span>
+        <div class="ab-viewport" id="abViewport">
+          <div class="ab-track" id="abTrack"></div>
+        </div>
+        <button class="ab-close" id="abClose" type="button" title="隐藏公告（本次会话）" aria-label="隐藏公告">✕</button>
+      </div>
+
       <!-- 顶部「常用收藏」区块（常驻在 hero 与第一个分类之间）：
            内容由 app.js 的 renderTopFavorites() 填充。
            刻意**不放进 #sections** —— 那个容器每次 renderSections() 都会
@@ -222,9 +234,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/lunar.js?v=202610171813"></script>
-  <script src="js/logos.js?v=202610171813"></script>
-  <script src="js/totop.js?v=202610171813"></script>
-  <script src="js/app.js?v=202610171813"></script>
+  <script src="js/lunar.js?v=202610181241"></script>
+  <script src="js/logos.js?v=202610181241"></script>
+  <script src="js/totop.js?v=202610181241"></script>
+  <script src="js/app.js?v=202610181241"></script>
 </body>
 </html>

@@ -1290,6 +1290,9 @@
     syncLogoUI();
     $('#setSubtitle').value = s.subtitle || '';
     $('#setFooter').value = s.footer || '';
+    // 滚动公告：原样回填（含空行），不要 trim —— trim 会把用户刻意留的空行抹掉，
+    // 而空行是"这条公告先不显示"的一种写法。展示侧过滤空行，这里只负责如实呈现。
+    $('#setAnnouncement').value = s.announcement || '';
     // 主页中心模块（正文顶部大标题）：与顶栏那份独立。空值 = 沿用站点名称 / 站点描述，
     // 所以回填时保持空字符串，不要把回落后的值写进输入框（否则用户一保存就被固化了）。
     $('#setHeroTitle').value = s.heroTitle || '';
@@ -1599,6 +1602,11 @@
     s.logo = $('#setLogo').value.trim() || (window.NAV_LOGOS ? window.NAV_LOGOS.DEFAULT : '🌐');
     s.subtitle = $('#setSubtitle').value.trim();
     s.footer = $('#setFooter').value.trim();
+    // 滚动公告：**刻意不设长度上限**（需求就是"字数无限制"，KV 单值上限 25MB，
+    // 远大于任何人工公告）。每行算一条，展示侧过滤空行，所以这里也不 trim 中间的空行，
+    // 只去掉首尾空白。全空则删字段，前台据此隐藏公告栏。
+    const announce = $('#setAnnouncement').value.replace(/^[\s\uFEFF]+|[\s\uFEFF]+$/g, '');
+    if (announce) s.announcement = announce; else delete s.announcement;
     // 主页中心模块的文字：留空就删掉字段（前台 renderHead 会自动回落到 title / subtitle），
     // 而不是存一个空串 —— 空串虽然结果一样，但导出 / 迁移时看起来像"设了个空标题"。
     const hTitle = $('#setHeroTitle').value.trim();

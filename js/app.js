@@ -247,6 +247,8 @@
     // 申请弹窗的「建议分类」下拉依赖现有分类：数据晚到时补一次，
     // 否则先打开弹窗再等到数据的场景下拉里只有占位项。
     fillApplyCategories();
+    // 后台实时预览改了「滚动公告」时，前台要跟着变（预览走的是这条链路）
+    renderAnnounce();
   }
 
   if (PREVIEW_MODE) {
@@ -858,6 +860,60 @@
     document.body.style.setProperty('--wp-blur', (s.wallpaperBlur || 0) + 'px');
   }
 
+  /* ===== 悬浮滚动公告栏 =====
+   * 数据：site.announcement，纯文本；**每行一条消息**，后台不限字数。
+   * 形态（按条数 / 长度自动选，不需要用户操心）：
+   *   多条消息      → 纵向轮播，每条 3.6 秒
+   *   单条且超宽    → 横向无缝滚动（两份相同内容 + translateX(-50%)）
+   *   单条且够短    → 静态展示（避免一个短语在条里来回晃）
+   * 吸顶用 --top-h（syncTopHeight 维护的顶栏实测高度），不自己再量一份。
+   * 用户本次会话点过关闭就整条隐藏：公告是"提示"，不该变成关不掉的遮挡。 */
+  let abRotateTimer = null;
+  function announceMessages() {
+    const s = state.data && state.data.site;
+    const raw = String((s && s.announcement) || '').replace(/\r\n?/g, '\n');
+    return raw.split('\n').map((t) => t.trim()).filter(Boolean);
+  }
+  function renderAnnounce() {
+    const bar = $('#announceBar'), track = $('#abTrack');
+    if (!bar || !track) return;
+    if (abRotateTimer) { clearInterval(abRotateTimer); abRotateTimer = null; }
+    let closed = false;
+    try { closed = sessionStorage.getItem('navAnnounceClosed') === '1'; } catch (e) {}
+    const msgs = announceMessages();
+    if (!msgs.length || closed) {
+      bar.hidden = true;
+      track.className = 'ab-track';
+      track.innerHTML = '';
+      return;
+    }
+    bar.hidden = false;
+    if (msgs.length === 1) {
+      track.className = 'ab-track marquee';
+      const one = '<span class="ab-text">' + escapeHtml(msgs[0]) + '</span>';
+      // 两份相同内容才滚得回去（无缝），第二份对读屏软件隐藏
+      track.innerHTML = one + one.replace('class="ab-text"', 'class="ab-text" aria-hidden="true"');
+      // 静态宽度要等布局完成再量；短于一屏就不滚（这里的 +8 是给四舍五入留余量）
+      requestAnimationFrame(() => {
+        const vp = track.parentElement;
+        if (!vp || vp.clientWidth === 0) return;            // jsdom / 容器隐藏时跳过
+        if (track.scrollWidth <= vp.clientWidth + 8) return;
+        // 匀速约 55px/s：长公告不会快成人眼追不上，短公告也不会慢得像卡住
+        track.style.animationDuration = Math.max(16, Math.round(track.scrollWidth / 55)) + 's';
+        track.classList.add('play');
+      });
+    } else {
+      track.className = 'ab-track rotator';
+      let i = 0;
+      const show = () => {
+        track.innerHTML = '<span class="ab-text">' + escapeHtml(msgs[i % msgs.length]) + '</span>';
+        i++;
+      };
+      show();
+      abRotateTimer = setInterval(show, 3600);
+    }
+  }
+
   /* 集中应用所有设置（在数据加载完成后调用） */
   function applySettings() {
     const s = state.data.site || {};
@@ -889,6 +945,7 @@
     scheduleSyncTopHeight();
     // 壁纸
     applyWallpaper();
+    renderAnnounce();
     // 默认 / 记住分类
     const remembered = (s.rememberCategory && sessionStorage.getItem('nav_active')) || s.defaultCategory || 'all';
     state.active = remembered;
@@ -1516,6 +1573,15 @@
   function bindAccountUI() {
     const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
 
+    // 公告栏关闭钮：只对本次会话生效（sessionStorage），刷新/重进又会显示。
+    // 不用 localStorage —— 公告是管理员发的，用户换个心情回来看可能还想再看一次，
+    // 永久关掉等于后台改了内容用户也不知道。
+    on('#abClose', 'click', () => {
+      try { sessionStorage.setItem('navAnnounceClosed', '1'); } catch (e) {}
+      const bar = $('#announceBar');
+      if (bar) bar.hidden = true;
+    });
+
     on('#acctBtn', 'click', () => {
       if (acct.loggedIn) openUserCenter();
       else { switchAuthTab('login'); openMask($('#authMask')); }
@@ -1829,6 +1895,13 @@
     safe(startAutoRefresh);
     // 视口变化会让顶栏换行 / 站名描述重新排布，高度要跟着重算
     window.addEventListener('resize', scheduleSyncTopHeight);
+    // 公告栏滚动与否取决于「文字宽 vs 容器宽」，窗口变了要重判一次。
+    // 防抖 300ms：resize 会连续触发，每次都重渲会把轮播计时打乱。
+    let abResizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(abResizeTimer);
+      abResizeTimer = setTimeout(() => { try { renderAnnounce(); } catch (e) {} }, 300);
+    });
     // 自定义字体加载完成后文字尺寸会跳一下，再量一次更稳
     if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
       document.fonts.ready.then(scheduleSyncTopHeight).catch(() => {});
