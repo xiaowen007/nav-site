@@ -12,7 +12,12 @@
   --shadow: 0 2px 12px rgba(31, 41, 51, 0.06);
   --radius: 14px;
   --side-w: 232px;
-  --top-h: 60px;   /* 顶栏高度（含搜索引擎搜索框）：侧栏 / 锚点偏移都基于它 */
+  --top-h: 60px;   /* 顶栏高度（含搜索引擎搜索框）：侧栏 sticky top、公告栏 sticky top 基于它 */
+  /* 吸顶总高度 = 顶栏 + 公告栏（公告栏显示时那一截）。**内容区的锚点偏移必须用它**：
+     公告栏在 main.content 内、不覆盖侧栏，所以侧栏仍用 --top-h；
+     但「滚动到分类」时不吃掉公告栏这一截，标题就会被压住（2026-10-18 实测 28px）。
+     由 app.js 的 syncTopHeight() 写入行内值，这里只是首屏兜底。 */
+  --stick-h: 60px;
   /* 可在后台「首页设置 → 字体」调整，由 JS 写入行内样式覆盖 */
   --font-size: 14px;
   /* 顶栏左上角「站点名称 / 站点描述」两个独立字号（各自一个滑块）。
@@ -340,7 +345,12 @@ a { color: inherit; text-decoration: none; }
    允许任意位置换行，长词才会老实折到下一行。页脚同理（也常被填成一串网址）。 */
 .hero h1, .hero p, .footer { overflow-wrap: anywhere; }
 
-.section { margin-bottom: 30px; scroll-margin-top: calc(var(--top-h) + 12px); }
+/* 锚点偏移用 --stick-h（顶栏 + 公告栏），不是 --top-h：公告栏显示时它同样吸在顶部，
+   只让位顶栏的话分类标题会被公告栏压住。--stick-h 未定义时回落到 --top-h。 */
+.section { margin-bottom: 30px; scroll-margin-top: calc(var(--stick-h, var(--top-h)) + 12px); }
+/* 2/3 级小分类（.subsection）同样带 sec- 前缀 id、同样会被跳转与 scrollspy 命中，
+   以前漏了 scroll-margin-top，跳到子分类时标题直接被顶栏吃掉。 */
+.subsection { scroll-margin-top: calc(var(--stick-h, var(--top-h)) + 12px); }
 .section-head {
   display: flex;
   align-items: center;

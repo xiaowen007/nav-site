@@ -391,17 +391,63 @@ function syncDataJs(data) {
 }
 
 /* ---------- 网页抓取与元信息提取 ---------- */
+/* 抓取目标的白名单校验（防 SSRF）：与 functions/_lib.js 的 isBlockedHost 保持同构。
+ * 「申请添加网站」游客也能提交，url 由外部决定而服务端主动去抓 —— 不校验等于对外
+ * 开放"访问任意地址并读回结果"的能力（2026-10-18 实测可抓回本机页面标题）。 */
+function isBlockedHost(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h) return true;
+  if (h === 'localhost' || /\.(localhost|local|internal|home\.arpa)$/.test(h)) return true;
+  if (h.includes(':')) {
+    const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(h);
+    if (mapped) return isBlockedHost(mapped[1]);
+    if (h === '::1' || h === '::') return true;
+    if (/^f[cd][0-9a-f]{2}:/.test(h)) return true;
+    if (/^fe[89ab][0-9a-f]:/.test(h)) return true;
+    return false;
+  }
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (v4) {
+    const a = Number(v4[1]), b = Number(v4[2]);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/.test(h)) return true;
+  return false;
+}
+
+/* 逐跳校验重定向：交给 fetch 自动跟随的话，公网地址 302 到 127.0.0.1 就能绕过主机校验 */
+async function safeFetch(targetUrl, signal, headers) {
+  let url = String(targetUrl);
+  for (let hop = 0; hop < 4; hop++) {
+    let u;
+    try { u = new URL(url); } catch { throw new Error('URL 不合法'); }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('只支持 http(s) 链接');
+    if (isBlockedHost(u.hostname)) throw new Error('不支持抓取内网地址');
+    const resp = await fetch(u.href, { signal, redirect: 'manual', headers });
+    if (resp.status >= 300 && resp.status < 400) {
+      const loc = resp.headers.get('location');
+      if (!loc) throw new Error('HTTP ' + resp.status);
+      url = new URL(loc, u).href;
+      continue;
+    }
+    return resp;
+  }
+  throw new Error('重定向次数过多');
+}
+
 async function fetchMeta(targetUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const resp = await fetch(targetUrl, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; NavBot/1.0; +https://example.com/bot)',
-        'Accept': 'text/html,application/xhtml+xml'
-      }
+    const resp = await safeFetch(targetUrl, controller.signal, {
+      'User-Agent': 'Mozilla/5.0 (compatible; NavBot/1.0; +https://example.com/bot)',
+      'Accept': 'text/html,application/xhtml+xml'
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     // 只读取前 256KB，避免大页面
@@ -1082,11 +1128,16 @@ const server = http.createServer(async (req, res) => {
 
       const list = loadApps();
       const ip = guest ? guestIp(req) : '';
+      // 拿不到来源 IP 就拒收（与 functions 同构）：游客限额与去重全靠 IP，
+      // IP 为空时 mine 恒为空、限流分支被跳过 —— 静默失效比直接拒绝更危险。
+      if (guest && !ip) {
+        return sendJSON(res, 400, { error: '无法识别来源，请登录后再提交申请', needLogin: true });
+      }
       const mine = guest
         ? list.filter((a) => a.status === ST_PENDING && a.guest && a.ip && a.ip === ip)
         : list.filter((a) => a.username === me.user && a.status === ST_PENDING);
       if (guest) {
-        if (ip && mine.length >= MAX_PENDING_PER_GUEST) {
+        if (mine.length >= MAX_PENDING_PER_GUEST) {
           return sendJSON(res, 429, { error: '提交太频繁：未登录时最多同时挂 ' + MAX_PENDING_PER_GUEST + ' 条待审申请，登录后可提交更多' });
         }
       } else if (mine.length >= MAX_PENDING_PER_USER) {

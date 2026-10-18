@@ -506,6 +506,15 @@
     root.style.removeProperty('--top-h');
     const h = Math.round(tb.getBoundingClientRect().height);
     if (h > 0) root.style.setProperty('--top-h', h + 'px');
+    // 吸顶总高度 = 顶栏 + 公告栏。要分清两个变量的用途：
+    //   --top-h   ：**只有顶栏**。公告栏自己的 sticky top 用它（否则会往下跳一个自己的高度），
+    //               侧栏 sticky top 也用它 —— 公告栏在 main.content 内，不覆盖侧栏。
+    //   --stick-h ：顶栏 + 公告栏。内容区的锚点偏移必须让开这一整段，
+    //               否则公告栏显示时分类标题会被压住（2026-10-18 实测：40px 的公告栏吃掉 28px）。
+    const ab = document.getElementById('announceBar');
+    const abH = ab && !ab.hidden ? Math.round(ab.getBoundingClientRect().height) : 0;
+    const base = h > 0 ? h : 0;
+    if (base + abH > 0) root.style.setProperty('--stick-h', (base + abH) + 'px');
   }
   function scheduleSyncTopHeight() {
     const run = () => { try { syncTopHeight(); } catch (e) {} };
@@ -869,6 +878,7 @@
    * 吸顶用 --top-h（syncTopHeight 维护的顶栏实测高度），不自己再量一份。
    * 用户本次会话点过关闭就整条隐藏：公告是"提示"，不该变成关不掉的遮挡。 */
   let abRotateTimer = null;
+  let abShownPrev = null;   // 上一次的显示状态，用来判断吸顶总高度是否需要重算
   function announceMessages() {
     const s = state.data && state.data.site;
     const raw = String((s && s.announcement) || '').replace(/\r\n?/g, '\n');
@@ -885,32 +895,42 @@
       bar.hidden = true;
       track.className = 'ab-track';
       track.innerHTML = '';
-      return;
-    }
-    bar.hidden = false;
-    if (msgs.length === 1) {
-      track.className = 'ab-track marquee';
-      const one = '<span class="ab-text">' + escapeHtml(msgs[0]) + '</span>';
-      // 两份相同内容才滚得回去（无缝），第二份对读屏软件隐藏
-      track.innerHTML = one + one.replace('class="ab-text"', 'class="ab-text" aria-hidden="true"');
-      // 静态宽度要等布局完成再量；短于一屏就不滚（这里的 +8 是给四舍五入留余量）
-      requestAnimationFrame(() => {
-        const vp = track.parentElement;
-        if (!vp || vp.clientWidth === 0) return;            // jsdom / 容器隐藏时跳过
-        if (track.scrollWidth <= vp.clientWidth + 8) return;
-        // 匀速约 55px/s：长公告不会快成人眼追不上，短公告也不会慢得像卡住
-        track.style.animationDuration = Math.max(16, Math.round(track.scrollWidth / 55)) + 's';
-        track.classList.add('play');
-      });
+      // 顺手清掉「上一条超长公告」写下的行内时长，否则下次切回短公告会带着旧值
+      track.style.animationDuration = '';
     } else {
-      track.className = 'ab-track rotator';
-      let i = 0;
-      const show = () => {
-        track.innerHTML = '<span class="ab-text">' + escapeHtml(msgs[i % msgs.length]) + '</span>';
-        i++;
-      };
-      show();
-      abRotateTimer = setInterval(show, 3600);
+      bar.hidden = false;
+      if (msgs.length === 1) {
+        track.className = 'ab-track marquee';
+        const one = '<span class="ab-text">' + escapeHtml(msgs[0]) + '</span>';
+        // 两份相同内容才滚得回去（无缝），第二份对读屏软件隐藏
+        track.innerHTML = one + one.replace('class="ab-text"', 'class="ab-text" aria-hidden="true"');
+        // 静态宽度要等布局完成再量；短于一屏就不滚（这里的 +8 是给四舍五入留余量）
+        requestAnimationFrame(() => {
+          const vp = track.parentElement;
+          if (!vp || vp.clientWidth === 0) return;            // jsdom / 容器隐藏时跳过
+          if (track.scrollWidth <= vp.clientWidth + 8) return;
+          // 匀速约 55px/s：长公告不会快成人眼追不上，短公告也不会慢得像卡住
+          track.style.animationDuration = Math.max(16, Math.round(track.scrollWidth / 55)) + 's';
+          track.classList.add('play');
+        });
+      } else {
+        track.className = 'ab-track rotator';
+        let i = 0;
+        const show = () => {
+          track.innerHTML = '<span class="ab-text">' + escapeHtml(msgs[i % msgs.length]) + '</span>';
+          i++;
+        };
+        show();
+        abRotateTimer = setInterval(show, 3600);
+      }
+    }
+    // 公告栏占位会改变吸顶总高度：显示状态一变就回写 --stick-h 并重建 scrollspy。
+    // scrollspy 的 rootMargin 是创建时算死的，不重建就还在用"只有顶栏"的旧高度。
+    const shown = !bar.hidden;
+    if (abShownPrev !== shown) {
+      abShownPrev = shown;
+      scheduleSyncTopHeight();
+      try { initScrollSpy(); } catch (e) {}
     }
   }
 
@@ -947,7 +967,14 @@
     applyWallpaper();
     renderAnnounce();
     // 默认 / 记住分类
-    const remembered = (s.rememberCategory && sessionStorage.getItem('nav_active')) || s.defaultCategory || 'all';
+    // sessionStorage 在隐私模式 / 禁 Cookie 的浏览器里会直接抛错，本项目其它 6 处都包了
+    // try，唯独这里裸调 —— 一抛就会中断 applySettings 后面的全部初始化，补上。
+    let remembered;
+    try {
+      remembered = (s.rememberCategory && sessionStorage.getItem('nav_active')) || s.defaultCategory || 'all';
+    } catch (e) {
+      remembered = s.defaultCategory || 'all';
+    }
     state.active = remembered;
     setActive(remembered);
     if (remembered !== 'all' && remembered !== '__fav') {
@@ -1321,9 +1348,15 @@
   /* 滚动高亮（scrollspy） */
   // 吸顶元素总高度（顶栏 + 搜索引擎条），用于锚点偏移与滚动监听
   function topOffset() {
-    // 搜索引擎搜索已并入顶栏，吸顶高度 = 顶栏实测高度（手机端顶栏为两行）
+    // 吸顶总高度 = 顶栏实测高度（手机端顶栏为两行）+ 公告栏（显示时那一截）。
+    // 「首次进入定位到目标分类」（applySettings 里的 scrollTo）和 scrollspy 的 rootMargin
+    // 都吃这个值；只算顶栏的话，公告栏一显示，分类标题就会被压住、滚动高亮也会提前一截。
+    // 注意与 syncTopHeight() 里的 --stick-h 保持一致：那边是给 CSS 用的，这边是给 JS 用的。
     const topbar = document.querySelector('.topbar');
-    return topbar ? topbar.offsetHeight : 60;
+    const bar = document.getElementById('announceBar');
+    const tbH = topbar ? topbar.offsetHeight : 60;
+    const abH = bar && !bar.hidden ? bar.offsetHeight : 0;
+    return tbH + abH;
   }
   let spyObserver = null;
   function initScrollSpy() {
@@ -1578,8 +1611,15 @@
     // 永久关掉等于后台改了内容用户也不知道。
     on('#abClose', 'click', () => {
       try { sessionStorage.setItem('navAnnounceClosed', '1'); } catch (e) {}
+      // 定时器必须显式停：只把节点 hidden 掉的话，setInterval 仍会每 3.6 秒
+      // 改一次看不见的 innerHTML（2026-10-18 实测：关闭后内容还在轮换）。
+      if (abRotateTimer) { clearInterval(abRotateTimer); abRotateTimer = null; }
       const bar = $('#announceBar');
       if (bar) bar.hidden = true;
+      // 公告栏高度没了，吸顶总高度要回落，否则往下滚到分类时仍按"有公告"让位
+      abShownPrev = false;
+      scheduleSyncTopHeight();
+      try { initScrollSpy(); } catch (e) {}
     });
 
     on('#acctBtn', 'click', () => {

@@ -67,6 +67,11 @@ export async function onRequestPost(context) {
 
     const list = await loadApps(env);
     const ip = guest ? guestIp(request) : '';
+    // 拿不到来源 IP 就拒收：游客的限流与去重**全靠 IP**，IP 为空时下面的 mine 永远为空、
+    // 限流分支也会被跳过 —— 等于额度失效且不报错。宁可让这一个用户去登录，也不放开闸门。
+    if (guest && !ip) {
+      return sendJSON({ error: '无法识别来源，请登录后再提交申请', needLogin: true }, 400);
+    }
     // 限流与去重：登录用户按账号算，游客按来源 IP 算（游客额度更小）。
     // 游客记录一律 username='' 且带 guest 标记，普通用户的「我的申请」按 username
     // 精确匹配，永远看不到别人的游客单；只有管理员看得到全部。
@@ -74,7 +79,7 @@ export async function onRequestPost(context) {
       ? list.filter((a) => a.status === ST_PENDING && a.guest && a.ip && a.ip === ip)
       : list.filter((a) => a.username === id.user && a.status === ST_PENDING);
     if (guest) {
-      if (ip && mine.length >= MAX_PENDING_PER_GUEST) {
+      if (mine.length >= MAX_PENDING_PER_GUEST) {
         return sendJSON({ error: '提交太频繁：未登录时最多同时挂 ' + MAX_PENDING_PER_GUEST + ' 条待审申请，登录后可提交更多' }, 429);
       }
     } else if (mine.length >= MAX_PENDING_PER_USER) {

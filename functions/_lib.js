@@ -224,17 +224,73 @@ export async function currentUser(request, env) {
 }
 
 /* ---------- 网页抓取与元信息提取 ---------- */
+/* ---------- 抓取目标的白名单校验（防 SSRF） ----------
+ * 「申请添加网站」是**游客也能用**的：请求体里的 url 完全由外部决定，服务端却会主动去抓。
+ * 不校验就等于对外开放一个"帮我访问任意地址并把结果读回来"的接口（2026-10-18 实测：
+ * 提交 http://127.0.0.1:8899/index.html，回包里 name 直接变成本站点的页面标题）。
+ *
+ * 这里只按主机名做静态判断，不依赖 DNS 解析结果 —— 域名解析到内网 IP（DNS rebinding）
+ * 在 Workers/Node 的 fetch 层面拦不住，属于另一层问题（部署到 CF 时由平台网络隔离兜底）。
+ * 要点：十进制/十六进制写法（http://2130706433/）也必须拦，否则一个白名单校验形同虚设。 */
+export function isBlockedHost(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h) return true;
+  // 本机/内网域名后缀
+  if (h === 'localhost' || /\.(localhost|local|internal|home\.arpa)$/.test(h)) return true;
+  // IPv6
+  if (h.includes(':')) {
+    const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(h);
+    if (mapped) return isBlockedHost(mapped[1]);
+    if (h === '::1' || h === '::') return true;
+    if (/^f[cd][0-9a-f]{2}:/.test(h)) return true;              // fc00::/7 唯一本地
+    if (/^fe[89ab][0-9a-f]:/.test(h)) return true;              // fe80::/10 链路本地
+    return false;
+  }
+  // IPv4
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (v4) {
+    const a = Number(v4[1]), b = Number(v4[2]);
+    if (a === 0 || a === 10 || a === 127) return true;          // 本网络 / 私有 / 回环
+    if (a === 169 && b === 254) return true;                    // 链路本地，含云元数据 169.254.169.254
+    if (a === 172 && b >= 16 && b <= 31) return true;           // 私有
+    if (a === 192 && b === 168) return true;                    // 私有
+    if (a === 100 && b >= 64 && b <= 127) return true;          // CGNAT
+    if (a >= 224) return true;                                  // 组播 / 保留 / 广播
+    return false;
+  }
+  // 纯数字或十六进制主机名：等价于 IPv4 的另一种写法，一律拒绝
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/.test(h)) return true;
+  return false;
+}
+
+/* 逐跳校验的抓取：redirect 不能交给 fetch 自己跟，否则公网地址 302 到 127.0.0.1
+ * 就能绕过上面的主机校验（这是最常见的 SSRF 绕过手法）。 */
+async function safeFetch(targetUrl, signal, headers) {
+  let url = String(targetUrl);
+  for (let hop = 0; hop < 4; hop++) {
+    let u;
+    try { u = new URL(url); } catch { throw new Error('URL 不合法'); }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('只支持 http(s) 链接');
+    if (isBlockedHost(u.hostname)) throw new Error('不支持抓取内网地址');
+    const resp = await fetch(u.href, { signal, redirect: 'manual', headers });
+    if (resp.status >= 300 && resp.status < 400) {
+      const loc = resp.headers.get('location');
+      if (!loc) throw new Error('HTTP ' + resp.status);
+      url = new URL(loc, u).href;
+      continue;
+    }
+    return resp;
+  }
+  throw new Error('重定向次数过多');
+}
+
 export async function fetchMeta(targetUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const resp = await fetch(targetUrl, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; NavBot/1.0; +https://example.com/bot)',
-        'Accept': 'text/html,application/xhtml+xml'
-      }
+    const resp = await safeFetch(targetUrl, controller.signal, {
+      'User-Agent': 'Mozilla/5.0 (compatible; NavBot/1.0; +https://example.com/bot)',
+      'Accept': 'text/html,application/xhtml+xml'
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const buf = await resp.arrayBuffer();
