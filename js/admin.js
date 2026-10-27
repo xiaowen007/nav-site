@@ -1997,6 +1997,254 @@
     try { localStorage.setItem(SIDE_TAB_KEY, name); } catch (e) {}
   }
 
+  /* ================= 左侧导航栏（可收缩） =================
+   * 改造前的痛点：6 个面板竖着排成一长列，找「账户管理」要一路滚下去，
+   * 滚到哪儿还容易忘记自己在哪个区块。现在同一时刻只显示一个区块。
+   *
+   * 收缩状态**持久化**（NAV_MINI_KEY）：它是纯粹的布局偏好，「我喜欢窄一点」下次
+   * 进来该还是窄的。这跟右侧「系统设置」面板刻意不持久化不同 —— 那个收起来会让
+   * 人以为设置丢了（真实反馈过），所以每次进来都展开。
+   */
+  const NAV_MINI_KEY = 'nav_admin_nav_mini';
+  const NAV_VIEW_KEY = 'nav_admin_view';
+
+  function navIsMini() {
+    const nav = $('#adminNav');
+    return !!nav && nav.classList.contains('mini');
+  }
+
+  function setNavMini(mini, opts) {
+    const nav = $('#adminNav');
+    if (!nav) return;
+    nav.classList.toggle('mini', !!mini);
+    const icon = $('#navToggleIcon');
+    if (icon) icon.textContent = mini ? '»' : '«';
+    const btn = $('#navToggle');
+    if (btn) {
+      btn.title = mini ? '展开导航栏（显示文字）' : '收起导航栏（只留图标）';
+      btn.setAttribute('aria-expanded', mini ? 'false' : 'true');
+      const t = btn.querySelector('.nt-txt');
+      if (t) t.textContent = mini ? '展开导航' : '收起导航';
+    }
+    if (!(opts && opts.silent)) {
+      try { localStorage.setItem(NAV_MINI_KEY, mini ? '1' : '0'); } catch (e) {}
+    }
+  }
+
+  // key 用的是各区块的 data-view：pv / 1 / 2 / 3 / 10 / 11
+  function switchAdminView(key, opts) {
+    const target = String(key);
+    const views = Array.prototype.slice.call(
+      document.querySelectorAll('.studio-main > [data-view]')
+    );
+    if (!views.length) return;
+    const exist = views.some((v) => v.getAttribute('data-view') === target);
+    if (!exist) return;                        // 旧缓存里的失效 key：保持现状
+    views.forEach((v) => {
+      v.classList.toggle('view-hidden', v.getAttribute('data-view') !== target);
+    });
+    document.querySelectorAll('#adminNav .nav-item[data-view]').forEach((b) => {
+      const hit = b.getAttribute('data-view') === target;
+      b.classList.toggle('on', hit);
+      if (hit) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
+    // 目标面板若之前被手动折叠过，切过来要自动展开 —— 点导航就是想看内容，
+    // 结果切过去只看到一行标题，等于没切。
+    const panel = views.find((v) => v.getAttribute('data-view') === target);
+    if (panel && panel.classList.contains('collapsed')) {
+      panel.classList.remove('collapsed');
+      const cur = getCollapsed();
+      delete cur[target];
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(cur)); } catch (e) {}
+    }
+    try { localStorage.setItem(NAV_VIEW_KEY, target); } catch (e) {}
+    // 切区块后回到页面顶部。直接回 0 而不是对齐 .admin-head：
+    // 顶栏是 sticky 的，把 .admin-head 滚到 top:0 会被顶栏盖掉 60px 高，
+    // 反而让人以为标题没了。切区块本来就是要「从头看这一块」。
+    if (!(opts && opts.silent)) {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+    }
+  }
+
+  function initAdminNav() {
+    let mini = false;
+    try { mini = localStorage.getItem(NAV_MINI_KEY) === '1'; } catch (e) {}
+    setNavMini(mini, { silent: true });
+    let view = 'pv';
+    try { view = localStorage.getItem(NAV_VIEW_KEY) || 'pv'; } catch (e) {}
+    switchAdminView(view, { silent: true });
+  }
+
+  function bindAdminNav() {
+    const nav = $('#adminNav');
+    if (!nav) return;
+    nav.addEventListener('click', (e) => {
+      const item = e.target.closest('.nav-item[data-view]');
+      if (item) { switchAdminView(item.getAttribute('data-view')); return; }
+      if (e.target.closest('#navSettings')) { setSideOpen(true); return; }
+      if (e.target.closest('#navToggle')) { setNavMini(!navIsMini()); return; }
+    });
+    // 键盘可达：导航项本身是 button，Tab + 回车天然可用，无需额外处理
+  }
+
+  /* ================= 通用输入弹窗（替代 window.prompt） =================
+   * 为什么非换不可：浏览器「阻止此页面创建更多对话框」一旦被勾选（后台反复用
+   * confirm / prompt 之后很容易触发），prompt 就**永远返回 null**。原来的代码是
+   *   const pwd = prompt(...); if (!pwd) return;
+   * 于是点「重置密码」的结果是：什么都不发生、也没有任何提示 —— 这就是该功能被
+   * 反馈「无效」的真正原因（后端接口本身是好的，新密码能登录、旧密码会失效）。
+   *
+   * 自己画的弹窗没有这个限制，还能补上原来做不到的：双输入确认（防止管理员打错
+   * 一个字符导致用户登不进去）、密码显隐、提交前按后端同样的规则做长度校验。
+   *
+   * 返回 Promise<string|null>：确定 → 值；取消 / 点遮罩 / Esc → null。
+   */
+  let askResolve = null;
+  let askCfg = null;
+
+  function closeAsk(value) {
+    const mask = $('#askModal');
+    if (mask) mask.style.display = 'none';
+    const r = askResolve;
+    askResolve = null;
+    askCfg = null;
+    if (r) r(value);
+  }
+
+  function askErr(msg) {
+    const el = $('#askErr');
+    if (!el) return;
+    el.textContent = msg || '';
+  }
+
+  function submitAsk() {
+    const cfg = askCfg;
+    if (!cfg) return;
+    if (cfg.kind === 'text') {
+      const inp = $('#askInput0');
+      const v = inp ? String(inp.value || '').trim() : '';
+      if (cfg.required && !v) { askErr(cfg.emptyMsg || '内容不能为空'); if (inp) inp.focus(); return; }
+      closeAsk(v);
+      return;
+    }
+    const p1 = ($('#askPwd1') || {}).value || '';
+    const p2 = ($('#askPwd2') || {}).value || '';
+    // 规则与后端 validatePassword 保持一致（6~64 位），前端先拦一道，
+    // 用户不必等一个来回才知道自己少打了一位
+    if (p1.length < 6) { askErr('密码至少 6 位'); $('#askPwd1').focus(); return; }
+    if (p1.length > 64) { askErr('密码最多 64 位'); $('#askPwd1').focus(); return; }
+    if (p1 !== p2) { askErr('两次输入的密码不一致'); $('#askPwd2').focus(); return; }
+    closeAsk(p1);
+  }
+
+  function openAsk(cfg) {
+    const mask = $('#askModal');
+    if (!mask) return Promise.resolve(null);
+    if (askResolve) closeAsk(null);            // 上一个没关就先关掉，避免 resolver 泄漏
+    askCfg = cfg;
+    $('#askTitle').textContent = cfg.title || '输入';
+    const desc = $('#askDesc');
+    desc.textContent = cfg.desc || '';
+    desc.style.display = cfg.desc ? '' : 'none';
+    askErr('');
+    const box = $('#askFields');
+    box.innerHTML = '';
+
+    if (cfg.kind === 'text') {
+      const wrap = document.createElement('div');
+      wrap.className = 'ask-field';
+      const lb = document.createElement('label');
+      lb.setAttribute('for', 'askInput0');
+      lb.textContent = cfg.label || '内容';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = 'askInput0';
+      // 所有非登录用途的输入框统一 name + autocomplete=off：
+      // 否则浏览器的密码管理器会把它当成「账号」灌值（后台踩过这个坑）
+      inp.name = 'ask-text';
+      inp.autocomplete = 'off';
+      inp.placeholder = cfg.placeholder || '';
+      wrap.appendChild(lb);
+      wrap.appendChild(inp);
+      box.appendChild(wrap);
+    } else {
+      const mk = (id, label, ph) => {
+        const f = document.createElement('div');
+        f.className = 'ask-field';
+        const lb = document.createElement('label');
+        lb.setAttribute('for', id);
+        lb.textContent = label;
+        const wrap = document.createElement('div');
+        wrap.className = 'ask-pwd-wrap';
+        const inp = document.createElement('input');
+        inp.type = 'password';
+        inp.id = id;
+        inp.name = id === 'askPwd1' ? 'new-password' : 'confirm-password';
+        inp.autocomplete = 'new-password';
+        inp.placeholder = ph;
+        const eye = document.createElement('button');
+        eye.type = 'button';
+        eye.className = 'ask-eye';
+        eye.dataset.target = id;
+        eye.title = '显示密码';
+        eye.textContent = '👁';
+        wrap.appendChild(inp);
+        wrap.appendChild(eye);
+        f.appendChild(lb);
+        f.appendChild(wrap);
+        return f;
+      };
+      box.appendChild(mk('askPwd1', '新密码', '至少 6 位'));
+      box.appendChild(mk('askPwd2', '确认新密码', '再输入一次'));
+      const rule = document.createElement('div');
+      rule.className = 'ask-rule';
+      rule.textContent = '6~64 位。重置后该账户的旧密码立即失效，请把新密码告知用户本人。';
+      box.appendChild(rule);
+    }
+
+    mask.style.display = 'flex';
+    return new Promise((resolve) => {
+      askResolve = resolve;
+      const first = box.querySelector('input');
+      if (first) setTimeout(() => { try { first.focus(); } catch (e) {} }, 20);
+    });
+  }
+
+  // 单行文本：返回 trim 后的字符串，取消返回 null
+  function askText(cfg) {
+    return openAsk(Object.assign({ kind: 'text' }, cfg || {}));
+  }
+  // 新密码 + 确认：返回密码串，取消返回 null
+  function askPassword(cfg) {
+    return openAsk(Object.assign({ kind: 'password' }, cfg || {}));
+  }
+
+  function bindAskModal() {
+    const mask = $('#askModal');
+    if (!mask) return;
+    $('#askOk').addEventListener('click', submitAsk);
+    $('#askCancel').addEventListener('click', () => closeAsk(null));
+    mask.addEventListener('click', (e) => {
+      if (e.target === mask) { closeAsk(null); return; }
+      const b = e.target.closest('.ask-eye');
+      if (!b) return;
+      const inp = document.getElementById(b.dataset.target);
+      if (!inp) return;
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      b.textContent = show ? '🙈' : '👁';
+      b.title = show ? '隐藏密码' : '显示密码';
+    });
+    mask.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeAsk(null); return; }
+      if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') {
+        e.preventDefault();
+        submitAsk();
+      }
+    });
+  }
+
   /* 设置面板的展开 / 收起。
    * **默认打开**：后台一进来面板就是展开的（展开状态不持久化，见 bindStudio）。
    * 收起是临时动作，但收起后必须**一眼能呼出来**，所以做成「缩成卡片」而非隐藏：
@@ -2231,8 +2479,10 @@
       if (notice) notice.style.display = 'none';
       return true;
     }
-    // 非管理员：隐藏全部管理面板与右侧设置侧栏，只留提示
-    document.querySelectorAll('.panel, .studio-side').forEach((p) => { p.style.display = 'none'; });
+    // 非管理员：隐藏全部管理面板与右侧设置侧栏，只留提示。
+    // .admin-nav 也要一起藏 —— 它是后加的左侧导航，不是 .panel，
+    // 漏掉就会给普通用户留一排「点了没反应」的图标。
+    document.querySelectorAll('.panel, .studio-side, .admin-nav').forEach((p) => { p.style.display = 'none'; });
     if (notice) {
       const u = $('#roleNoticeUser');
       if (u) u.textContent = (me && (me.nickname || me.user)) || state.meUser;
@@ -2253,6 +2503,15 @@
       if (badge) {
         badge.textContent = (r.pending || 0) + ' 待审核';
         badge.className = 'ai-status ' + (r.pending ? 'ai-on' : 'ai-off');
+      }
+      // 左侧导航上的同一个数字：面板多数时候是隐藏的（导航切成别的区块），
+      // 徽标是「有待审核」唯一的常驻提示，必须一起刷。
+      const navBadge = $('#navAcctBadge');
+      if (navBadge) {
+        const n = r.pending || 0;
+        navBadge.textContent = n ? String(n) : '';
+        navBadge.classList.toggle('zero', !n);
+        navBadge.title = n ? n + ' 个账户待审核' : '';
       }
       const stat = $('#acctStat');
       if (stat) stat.textContent = '共 ' + (r.total || 0) + ' 个账户';
@@ -2332,12 +2591,27 @@
 
     const body = { action };
     if (action === 'reject') {
-      const note = prompt('请填写驳回理由（会展示给该用户，可留空）', '') || '';
+      // 以前是 window.prompt：被浏览器「阻止对话框」拦截后永远返回 null，
+      // 驳回理由会被静默吞成空串。改用自家弹窗，取消（null）才真的算取消。
+      const note = await askText({
+        title: '驳回注册',
+        desc: '理由会展示给「' + (acc.nickname || acc.username) + '」，可以留空。',
+        label: '驳回理由',
+        placeholder: '例如：请说明使用本站的用途',
+        required: false
+      });
+      if (note === null) return;
       body.note = note;
     }
     if (action === 'resetPassword') {
-      const pwd = prompt('请输入该账户的新密码（至少 6 位）', '');
-      if (!pwd) return;
+      // 关键修复：原来 prompt 返回 null（被拦截 / 用户取消）时直接 return，
+      // 界面上没有任何反馈，看起来就像「按钮坏了」。现在用自定义弹窗：
+      // 双输入确认 + 密码显隐 + 前端同规则校验，成功后还会 toast 提示。
+      const pwd = await askPassword({
+        title: '重置密码',
+        desc: '为「' + (acc.nickname || acc.username) + '」（账号 ' + acc.username + '）设置新密码。'
+      });
+      if (!pwd) return;   // 用户主动取消
       body.password = pwd;
     }
     if (action === 'disable' && !confirm('确定禁用「' + acc.username + '」？其登录状态会立即失效。')) return;
@@ -2345,6 +2619,11 @@
     try {
       await api('/api/accounts/' + encodeURIComponent(id), 'PATCH', body);
       await loadAccounts();
+      // 原来成功了什么都不说，而列表外观也不会变（密码本来就不显示在列表里），
+      // 于是「点了没反应 = 功能坏了」。这一行提示是本次修复的一半。
+      toast(action === 'resetPassword'
+        ? '已重置「' + (acc.nickname || acc.username) + '」的密码，请把新密码告知本人（旧密码已失效）'
+        : label + '成功：' + (acc.nickname || acc.username), 4600);
     } catch (e) { alert(label + '失败：' + e.message); }
   }
 
@@ -2367,6 +2646,14 @@
       if (badge) {
         badge.textContent = (r.pending || 0) + ' 待审核';
         badge.className = 'ai-status ' + (r.pending ? 'ai-on' : 'ai-off');
+      }
+      // 同 loadAccounts：导航上的徽标是「有待审核」唯一常驻可见的提示
+      const navBadge = $('#navAppBadge');
+      if (navBadge) {
+        const n = r.pending || 0;
+        navBadge.textContent = n ? String(n) : '';
+        navBadge.classList.toggle('zero', !n);
+        navBadge.title = n ? n + ' 条申请待审核' : '';
       }
       const stat = $('#appStat');
       if (stat) stat.textContent = '共 ' + (r.total || 0) + ' 条申请';
@@ -2424,10 +2711,18 @@
       return;
     }
     if (action === 'reject') {
-      const note = prompt('请填写驳回理由（会展示给提交者，可留空）', '') || '';
+      const note = await askText({
+        title: '驳回申请',
+        desc: '理由会展示给提交者，可以留空。',
+        label: '驳回理由',
+        placeholder: '例如：该站点无法访问',
+        required: false
+      });
+      if (note === null) return;
       try {
         await api('/api/applications/' + encodeURIComponent(id), 'PATCH', { action: 'reject', note });
         await loadApplications();
+        toast('已驳回该申请', 3000);
       } catch (e) { alert('驳回失败：' + e.message); }
       return;
     }
@@ -2456,6 +2751,10 @@
     bindSettings();
     bindCollapse();
     bindStudio();       // 右侧设置侧栏 + 首页预览（元素缺失时内部自动跳过）
+    bindAdminNav();     // 左侧导航：区块切换 + 收缩（元素缺失时内部自动跳过）
+    initAdminNav();     // 立刻恢复上次的区块与收缩状态（不能等登录后才做，
+                        // 否则未登录/普通用户会看到 6 个区块同时展开的旧样子）
+    bindAskModal();     // 通用输入弹窗（替代 window.prompt）
     bindAccountsUI();   // ⑩ 账户管理 / ⑪ 申请审核 的刷新与筛选（元素缺失时内部自动跳过）
 
     $('#addCat').addEventListener('click', addCat);

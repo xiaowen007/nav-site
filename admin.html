@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610262055" />
+  <link rel="stylesheet" href="css/style.css?v=202610271822" />
   <style>
     .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -363,9 +363,119 @@
     .tag.self { border-color: var(--muted); }
     .btn.sm.tiny { padding: 4px 9px; font-size: 11.5px; }
 
-    /* ===================== 工作台：左预览 + 右设置面板 ===================== */
+    /* ===================== 工作台：左导航 + 中内容 + 右设置面板 ===================== */
     .studio { display: flex; align-items: flex-start; gap: 16px; }
     .studio-main { flex: 1; min-width: 0; }
+
+    /* —— 左侧导航栏（可收缩） ——
+       改造前：6 个面板竖着排成一长列，找「账户管理」要一路滚下去，滚到哪儿
+       还容易忘记自己在哪个区块。现在改成固定导航 + 单面板显示。
+       收缩态只留图标（58px），展开态显示文字（208px）；状态存 localStorage。
+       窄屏（≤1024px）不再是竖栏，而是页头下方一条可横向滚动的分段条 ——
+       手机上没有空间常驻一个竖栏，塞进去只会挤压正文。 */
+    .admin-nav {
+      flex: none; width: 208px;
+      position: sticky; top: calc(var(--top-h, 60px) + 12px);
+      display: flex; flex-direction: column; gap: 2px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 7px;
+      z-index: 20;
+      transition: width .16s ease;
+    }
+    .admin-nav.mini { width: 58px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border: none; border-radius: 9px; background: transparent;
+      font-family: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+      text-align: left; white-space: nowrap; overflow: hidden; width: 100%;
+      transition: background .13s, color .13s;
+    }
+    .nav-item:hover { background: var(--bg); }
+    .nav-item.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+    .nav-item .ni-icon { flex: none; width: 20px; text-align: center; font-size: 15px; line-height: 1; }
+    .nav-item .ni-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    /* 待审核数量徽标：跟面板标题里那个是同一份数据（loadAccounts / loadApplications 一起刷） */
+    .nav-item .ni-badge {
+      flex: none; font-size: 10.5px; font-weight: 600; line-height: 1.7; padding: 0 6px;
+      border-radius: 9px; background: #fdeceb; color: #e8543f;
+    }
+    .nav-item .ni-badge:empty, .nav-item .ni-badge.zero { display: none; }
+    .nav-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+    /* 收缩按钮：跟导航项之间拉一条分隔线，视觉上「这是工具栏，不是又一页」 */
+    .nav-toggle {
+      margin-top: 4px; display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border: none; border-top: 1px solid var(--border);
+      border-radius: 0 0 9px 9px; background: transparent;
+      font-family: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer;
+      white-space: nowrap; overflow: hidden; width: 100%;
+    }
+    .nav-toggle:hover { background: var(--bg); color: var(--text); }
+    .nav-toggle .ni-icon { flex: none; width: 20px; text-align: center; font-size: 14px; line-height: 1; }
+    /* 收缩态：只留图标，文字隐藏；tooltip 靠 title 属性。
+       但**待审核数字必须留着** —— 收缩态下它是最有用的信息，藏起来等于让人
+       永远想不起去点「账户管理」。改成钉在图标右上角的小圆点。 */
+    .admin-nav.mini .ni-txt,
+    .admin-nav.mini .nt-txt { display: none; }
+    .admin-nav.mini .nav-item,
+    .admin-nav.mini .nav-toggle { justify-content: center; padding: 9px 0; }
+    .admin-nav.mini .nav-item { position: relative; }
+    .admin-nav.mini .ni-badge {
+      position: absolute; top: 2px; right: 7px;
+      min-width: 15px; height: 15px; line-height: 15px; padding: 0 4px;
+      font-size: 9.5px; border-radius: 8px; text-align: center;
+    }
+    .admin-nav.mini .ni-badge.zero { display: none; }
+    /* 面板视图切换：同一时刻只显示一个区块 */
+    .studio-main > .view-hidden { display: none; }
+
+    /* 窄屏：竖栏 → 页头下方一条横向分段条 */
+    @media (max-width: 1024px) {
+      .studio { flex-wrap: wrap; }
+      .admin-nav,
+      .admin-nav.mini {
+        width: 100%; flex: 1 0 100%;
+        position: static;
+        flex-direction: row; align-items: center; gap: 4px;
+        overflow-x: auto; padding: 6px;
+        /* iOS 上溢出滚动要惯性，否则横向拖不动 */
+        -webkit-overflow-scrolling: touch;
+      }
+      .admin-nav .nav-sep { width: 1px; height: 20px; margin: 0 3px; flex: none; }
+      /* 窄屏一律显示文字：只有图标的分段条没人猜得出来是什么。
+         同时把徽标从「收缩态的小圆点」还原成行内胶囊 —— 横向条里没有角可以钉。 */
+      .admin-nav.mini .ni-txt { display: inline-block; }
+      .admin-nav.mini .ni-badge {
+        display: inline-block; position: static; min-width: 0; height: auto;
+        line-height: 1.7; padding: 0 6px; font-size: 10.5px; border-radius: 9px;
+      }
+      .admin-nav.mini .nav-item { position: static; }
+      .admin-nav.mini .nav-item,
+      .admin-nav.mini .nav-toggle { padding: 9px 10px; }
+      .admin-nav .nav-item, .admin-nav .nav-toggle { flex: none; width: auto; }
+      .admin-nav .nav-toggle { margin-top: 0; margin-left: auto; }
+      .admin-nav .nav-toggle .nt-txt { display: none; }
+    }
+
+    /* —— 输入弹窗（替代 window.prompt） ——
+       为什么不用 prompt：浏览器「阻止此页面创建更多对话框」一旦被勾选（后台反复用
+       confirm / prompt 之后很容易发生），prompt 就永远返回 null —— 表现就是
+       「点「重置密码」毫无反应」，这正是这个功能被反馈「无效」的原因。
+       自己画一个没有这个限制，还能做双输入确认 / 密码显隐 / 实时规则校验。 */
+    .ask-modal { width: 384px; }
+    .ask-modal .ask-desc { font-size: 12.5px; line-height: 1.7; color: var(--muted); margin: 0 0 12px; }
+    .ask-field { margin-bottom: 10px; }
+    .ask-field > label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+    .ask-pwd-wrap { position: relative; }
+    .ask-pwd-wrap input { padding-right: 42px; }
+    .ask-eye {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      border: none; background: transparent; cursor: pointer;
+      font-size: 16px; line-height: 1; padding: 5px 7px; color: var(--muted); border-radius: 6px;
+    }
+    .ask-eye:hover { color: var(--primary); background: var(--bg); }
+    .ask-rule { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .ask-err { min-height: 19px; font-size: 12.5px; font-weight: 600; color: #e8543f; padding-top: 2px; }
+    .ask-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 
     /* —— 首页预览 —— */
     .pv-panel { padding: 14px 16px 16px; }
@@ -658,7 +768,7 @@
     <div class="admin-head">
       <div class="ah-main">
         <h1>导航站后台管理</h1>
-        <p class="hint">左边实时预览首页效果，右边「系统设置」里改标题、卡片、壁纸与 AI；分类与链接等数据在左下的数据面板里维护。</p>
+        <p class="hint">用左侧导航切换区块：<b>首页预览</b>看效果、<b>导航数据</b>管分类与链接、<b>账户 / 申请审核</b>管人；右侧「系统设置」里改标题、卡片、壁纸与 AI。导航栏可收缩成只留图标。</p>
       </div>
       <a class="back" href="index.html">返回首页</a>
     </div>
@@ -670,10 +780,45 @@
     </div>
 
     <div class="studio">
-      <!-- ==================== 左：预览 + 数据管理 ==================== -->
+      <!-- ==================== 左：导航（可收缩） ==================== -->
+      <aside class="admin-nav" id="adminNav" aria-label="后台导航">
+        <button class="nav-item on" type="button" data-view="pv" title="首页预览">
+          <span class="ni-icon" aria-hidden="true">🖥️</span><span class="ni-txt">首页预览</span>
+        </button>
+        <button class="nav-item" type="button" data-view="1" title="导航数据管理">
+          <span class="ni-icon" aria-hidden="true">📚</span><span class="ni-txt">导航数据</span>
+        </button>
+        <button class="nav-item" type="button" data-view="2" title="数据导入 / 导出">
+          <span class="ni-icon" aria-hidden="true">🔄</span><span class="ni-txt">导入导出</span>
+        </button>
+        <button class="nav-item" type="button" data-view="3" title="AI 自动识别写入">
+          <span class="ni-icon" aria-hidden="true">🤖</span><span class="ni-txt">AI 识别</span>
+        </button>
+        <div class="nav-sep" aria-hidden="true"></div>
+        <button class="nav-item" type="button" data-view="10" title="账户管理">
+          <span class="ni-icon" aria-hidden="true">👤</span><span class="ni-txt">账户管理</span>
+          <span class="ni-badge zero" id="navAcctBadge" aria-hidden="true"></span>
+        </button>
+        <button class="nav-item" type="button" data-view="11" title="申请审核">
+          <span class="ni-icon" aria-hidden="true">📥</span><span class="ni-txt">申请审核</span>
+          <span class="ni-badge zero" id="navAppBadge" aria-hidden="true"></span>
+        </button>
+        <div class="nav-sep" aria-hidden="true"></div>
+        <!-- 「系统设置」不参与视图切换：它打开的是右侧那块面板（跟预览联动，
+             所以留在右边而不是搬进中间）。 -->
+        <button class="nav-item" type="button" id="navSettings" title="打开右侧「系统设置」面板">
+          <span class="ni-icon" aria-hidden="true">⚙️</span><span class="ni-txt">系统设置</span>
+        </button>
+        <button class="nav-toggle" type="button" id="navToggle" title="收起导航栏（只留图标）">
+          <span class="ni-icon" aria-hidden="true" id="navToggleIcon">«</span>
+          <span class="nt-txt">收起导航</span>
+        </button>
+      </aside>
+
+      <!-- ==================== 中：预览 + 数据管理 ==================== -->
       <div class="studio-main">
         <!-- 首页预览 -->
-        <div class="panel pv-panel" id="pvPanel">
+        <div class="panel pv-panel" id="pvPanel" data-view="pv">
           <div class="pv-head">
             <h2>🖥️ 首页预览 <span class="pv-dirty" id="pvDirty">有未保存的更改</span></h2>
             <div class="pv-tools">
@@ -699,7 +844,7 @@
         </div>
 
         <!-- ① 导航数据管理 -->
-        <div class="panel">
+        <div class="panel" data-view="1">
           <h2 class="ph-toggle" data-panel="1">① 导航数据管理 <span id="savedDot" class="saved-dot"></span><span class="ph-arrow">▾</span></h2>
           <div class="panel-body">
           <div class="console">
@@ -769,7 +914,7 @@
         </div>
 
         <!-- ② 数据导入 / 导出 -->
-        <div class="panel">
+        <div class="panel" data-view="2">
           <h2 class="ph-toggle" data-panel="2">② 数据导入 / 导出<span class="ph-arrow">▾</span></h2>
           <div class="panel-body">
 
@@ -821,7 +966,7 @@
         </div>
 
         <!-- ③ AI 自动识别写入 -->
-        <div class="panel">
+        <div class="panel" data-view="3">
           <h2 class="ph-toggle" data-panel="3">③ AI 自动识别写入<span class="ph-arrow">▾</span></h2>
           <div class="panel-body">
           <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -839,7 +984,7 @@
         </div>
 
         <!-- ④ 账户管理 -->
-        <div class="panel">
+        <div class="panel" data-view="10">
           <h2 class="ph-toggle" data-panel="10">④ 账户管理 <span id="acctPending" class="ai-status ai-off">0 待审核</span><span class="ph-arrow">▾</span></h2>
           <div class="panel-body">
             <p class="hint">访问者自助注册后处于「待审核」，通过后才能登录；也可随时禁用、提权为管理员或重置密码。</p>
@@ -853,7 +998,7 @@
         </div>
 
         <!-- ⑤ 申请审核 -->
-        <div class="panel">
+        <div class="panel" data-view="11">
           <h2 class="ph-toggle" data-panel="11">⑤ 申请审核 <span id="appPending" class="ai-status ai-off">0 待审核</span><span class="ph-arrow">▾</span></h2>
           <div class="panel-body">
             <p class="hint">普通用户提交的「添加网站」申请。通过时会自动收录进所选分类（同网址已存在则更新，不会产生重复条目）。</p>
@@ -1269,6 +1414,21 @@
     </div>
   </div>
 
+  <!-- 通用输入弹窗：字段由 js/admin.js 的 askText() / askPassword() 注入。
+       原来是两处 window.prompt（重置密码、驳回理由），被浏览器拦截后点击毫无反应。 -->
+  <div class="modal-mask" id="askModal" style="display:none">
+    <div class="modal ask-modal" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+      <h3 id="askTitle">输入</h3>
+      <p class="ask-desc" id="askDesc"></p>
+      <div id="askFields"></div>
+      <div class="ask-err" id="askErr"></div>
+      <div class="ask-foot">
+        <button class="btn sm ghost" id="askCancel" type="button">取消</button>
+        <button class="btn sm" id="askOk" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
       try {
@@ -1278,9 +1438,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202610262055"></script>
-  <script src="js/totop.js?v=202610262055"></script>
-  <script src="js/wallpapers.js?v=202610262055"></script>
-  <script src="js/admin.js?v=202610262055"></script>
+  <script src="js/logos.js?v=202610271822"></script>
+  <script src="js/totop.js?v=202610271822"></script>
+  <script src="js/wallpapers.js?v=202610271822"></script>
+  <script src="js/admin.js?v=202610271822"></script>
 </body>
 </html>
