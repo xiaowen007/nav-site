@@ -1975,16 +1975,18 @@
     });
   }
 
-  /* ================= 工作台：首页预览 + 右侧系统设置面板 =================
-   * 布局：左列「首页预览 + 数据管理面板」，右列是 sticky 的设置侧栏。
+  /* ================= 工作台：左导航 + 单页视图（含独立成页的系统设置） =================
+   * 布局：左列导航（可收缩成图标条）+ 右侧单页视图。系统设置是导航第 2 项
+   * 的一整页（原来是右下角一条 330~400px 的 sticky 抽屉）。
    * 预览的实时性来自一条同源数据通道：后台把「内存中尚未保存」的 state.data
    * 写进 localStorage.nav_preview_data 并 postMessage 给 iframe，前台
    * （js/app.js 在 URL 带 preview=1 时）优先读这份数据并热更新重渲染。
-   * 因此改设置不必先保存就能在左侧看到效果。
+   * 因此改设置不必先保存就能在「首页预览」里看到效果。
    */
   const SIDE_TAB_KEY = 'nav_admin_side_tab';
   /* 历史遗留键：早期版本把「展开/收起」也存这儿，结果收起一次就永久收起，
-     用户以为设置没了。现在只保留常量用于**清理**这个旧值，不再写入、不再读取。 */
+     用户以为设置没了。抽屉形态已经取消（设置成了独立一页），这个常量只剩
+     **清理**用途：进后台时把老值删掉，免得留在存储里让人误会。 */
   const SIDE_OPEN_KEY = 'nav_admin_side_open';
   const PREVIEW_KEY = 'nav_preview_data';
 
@@ -2007,8 +2009,10 @@
    * 滚到哪儿还容易忘记自己在哪个区块。现在同一时刻只显示一个区块。
    *
    * 收缩状态**持久化**（NAV_MINI_KEY）：它是纯粹的布局偏好，「我喜欢窄一点」下次
-   * 进来该还是窄的。这跟右侧「系统设置」面板刻意不持久化不同 —— 那个收起来会让
-   * 人以为设置丢了（真实反馈过），所以每次进来都展开。
+   * 进来该还是窄的。
+   *
+   * 「系统设置」现在是导航里普通的一项（data-view="settings"，排第 2），不再是
+   * 「点一下打开右边抽屉」的特殊按钮 —— 特殊入口会让「当前在哪一页」变得含糊。
    */
   const NAV_MINI_KEY = 'nav_admin_nav_mini';
   const NAV_VIEW_KEY = 'nav_admin_view';
@@ -2036,7 +2040,7 @@
     }
   }
 
-  // key 用的是各区块的 data-view：pv / 1 / 2 / 3 / 10 / 11
+  // key 用的是各区块的 data-view：pv / settings / 1 / 2 / 3 / 10 / 11
   function switchAdminView(key, opts) {
     const target = String(key);
     const views = Array.prototype.slice.call(
@@ -2064,12 +2068,27 @@
       try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(cur)); } catch (e) {}
     }
     try { localStorage.setItem(NAV_VIEW_KEY, target); } catch (e) {}
+    /* 切回「首页预览」时，让 iframe 重新量一次自己的顶栏高度。
+       原因：停在「系统设置」页时预览 iframe 是 display:none，隐藏文档里的 rAF /
+       定时器会被节流甚至暂停 —— 在设置页把顶栏字号调大，iframe 那边量不出新高度，
+       --top-h 会一直停在旧值（实测 104px vs 实际 189px），切回来吸顶就压字。 */
+    if (target === 'pv') resyncPreviewFrame();
     // 切区块后回到页面顶部。直接回 0 而不是对齐 .admin-head：
     // 顶栏是 sticky 的，把 .admin-head 滚到 top:0 会被顶栏盖掉 60px 高，
     // 反而让人以为标题没了。切区块本来就是要「从头看这一块」。
     if (!(opts && opts.silent)) {
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
     }
+  }
+
+  /* 通知预览 iframe 重新同步布局（不重载、不丢当前预览数据） */
+  function resyncPreviewFrame() {
+    const frame = $('#pvFrame');
+    if (!frame) return;
+    try {
+      const w = frame.contentWindow;
+      if (w) w.postMessage({ type: 'nav-preview-resync' }, location.origin);
+    } catch (e) {}
   }
 
   function initAdminNav() {
@@ -2087,7 +2106,6 @@
     nav.addEventListener('click', (e) => {
       const item = e.target.closest('.nav-item[data-view]');
       if (item) { switchAdminView(item.getAttribute('data-view')); return; }
-      if (e.target.closest('#navSettings')) { setSideOpen(true); return; }
       if (e.target.closest('#navToggle')) { setNavMini(!navIsMini()); return; }
     });
     // 键盘可达：导航项本身是 button，Tab + 回车天然可用，无需额外处理
@@ -2261,7 +2279,7 @@
   }
 
   /* ================= 顶栏高度 → --top-h =================
-   * admin.html 里导航栏与右侧设置面板都用 `top: calc(var(--top-h, 60px) + 12px)`
+   * admin.html 里左侧导航栏与「系统设置」页的吸顶头部都用 `top: var(--top-h)`
    * 吸顶，但 **--top-h 从来没被写过值**，一直吃 fallback 的 60px。而实际顶栏
    * 高度随字号/缩放/是否换行在 50~64px 之间浮动 —— 差出来的那十几像素表现为
    * 「面板吸顶后头顶空一块」，窗口变窄后更明显。
@@ -2315,61 +2333,6 @@
     });
   }
 
-  /* 设置面板的展开 / 收起。
-   * **默认打开**：后台一进来面板就是展开的（展开状态不持久化，见 bindStudio）。
-   * 收起是临时动作，但收起后必须**一眼能呼出来**，所以做成「缩成卡片」而非隐藏：
-   *   ① 卡片本体（.studio-side.collapsed）——留在原位，带「点此展开 ▸」，
-   *      点整张卡片（或聚焦后回车）即展开，是主入口；
-   *   ② 顶栏「⚙ 展开设置」（#sideOpen）——吸顶，滚到页面最底下也点得到；
-   *   ③ 预览工具条「⚙ 打开设置」（#pvSettings）——视线本来就在预览区，最顺手。
-   * 三者状态全部由这里统一同步，杜绝「收起了却找不到地方打开」的死路。
-   * opts.silent = 静默（初始化时用，不弹提示）。
-   */
-  let sideHinted = false; // 本次会话是否已提示过「卡片在哪」
-  function setSideOpen(open, opts) {
-    const side = $('#studioSide');
-    if (!side) return;
-    const wasOpen = !side.classList.contains('collapsed');
-    side.classList.toggle('collapsed', !open);
-
-    // 收起态整张卡片就是按钮：让它能被 Tab 聚焦、能被读屏识别
-    side.tabIndex = open ? -1 : 0;
-    side.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (!open) side.setAttribute('title', '点此展开「系统设置」');
-
-    // ② 顶栏按钮：收起时出现（吸顶，任何时候都点得到）
-    const btn = $('#sideOpen');
-    if (btn) btn.classList.toggle('show', !open);
-
-    // ③ 预览工具条按钮：文案随状态切换，收起态高亮
-    const pvBtn = $('#pvSettings');
-    if (pvBtn) {
-      pvBtn.classList.toggle('on', !open);
-      pvBtn.textContent = open ? '⚙ 收起设置' : '⚙ 打开设置';
-      pvBtn.title = open ? '把「系统设置」收成一张小卡片，让预览拉通全宽' : '展开右侧的「系统设置」面板';
-    }
-
-    // 清掉旧版本留下的收起标记（不再写入：收起是临时动作，不跨会话生效）
-    try { localStorage.removeItem(SIDE_OPEN_KEY); } catch (e) {}
-
-    // 窄屏（≤1180px）下面板不再吸在右侧，而是页面底部的一个普通块：
-    // 展开后自动滚过去，否则会出现「明明点开了、屏幕上却什么都没有」的错觉。
-    if (open && !wasOpen && window.matchMedia('(max-width: 1180px)').matches) {
-      setTimeout(() => { try { side.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }, 30);
-    }
-
-    // 收起时说一句「卡片就在原地」，右侧还挂个「展开设置」后悔药（同一次会话只说一次）
-    if (!open && wasOpen && !(opts && opts.silent) && !sideHinted) {
-      sideHinted = true;
-      toast('已收起成右侧的小卡片 · 点卡片或右上角「⚙ 系统设置」都能展开', 5200,
-        { label: '展开设置', onClick: () => setSideOpen(true) });
-    }
-  }
-  function isSideOpen() {
-    const side = $('#studioSide');
-    return !!side && !side.classList.contains('collapsed');
-  }
-
   // 把当前 state.data 推给预览 iframe（先落盘、再 postMessage，两条路都走一遍）
   function pushPreview() {
     const frame = $('#pvFrame');
@@ -2390,55 +2353,29 @@
   }
 
   function bindStudio() {
-    const side = $('#studioSide');
-    if (!side) return;
+    const panel = $('#settingsPanel');
+    if (!panel) return;
 
-    // 标签页记住上次的（这个无所谓）；**展开状态不记** —— 见下方注释
+    // 清掉抽屉时代留下的「收起了」标记（现在没有收起态，留着只会让人误会）
+    try { localStorage.removeItem(SIDE_OPEN_KEY); } catch (e) {}
+
+    // 标签页记住上次的：这是无害的浏览偏好，下次进来还在同一组设置上
     let savedTab = 'home';
     try { savedTab = localStorage.getItem(SIDE_TAB_KEY) || 'home'; } catch (e) {}
     switchSideTab(savedTab);
-    /* ⚠️ 展开状态特意**不持久化**：后台一进来就是展开的（默认打开）。
-       之前把 collapsed 写进 localStorage，导致「上次手滑收起一次 → 之后每次进后台
-       都是收起态」，用户只会觉得「设置没了、找不到」（真实反馈）。收起是**临时**动作，
-       不该跨会话生效；本次会话里收起了，也随时能靠卡片 / 顶栏「⚙ 展开设置」/
-       预览工具条「⚙ 打开设置」呼出来。
-
-       例外：窄屏（≤1180px，见 CSS 里那条 media query）下侧栏排在预览**下方**，
-       且 max-height:none、内部不滚动 —— 展开时整块撑开，页面高度实测 3400px 以上，
-       要连滚好几屏才看得到面板尾部。这种屏上默认收起成一张小卡片，
-       页面高度立刻回到一屏多；要看设置点一下「⚙ 设置」即可。
-       只在**初始化时**判一次，不监听 resize 强收：用户正开着设置时缩小窗口，
-       面板突然消失比页面变长更让人困惑。 */
-    const narrow = window.matchMedia('(max-width: 1180px)').matches;
-    setSideOpen(!narrow, { silent: true });
 
     $('#sideTabs').addEventListener('click', (e) => {
       const b = e.target.closest('.side-tab');
       if (b) switchSideTab(b.dataset.tab);
     });
-    $('#sideClose').addEventListener('click', (e) => {
-      e.stopPropagation(); // 别冒泡到卡片本体（那边是「展开」）
-      setSideOpen(false);
+    // 预览工具条「⚙ 系统设置」：从预览直奔设置页。它只做导航，不再控制显隐 ——
+    // 设置是独立一页，用「收起 / 展开」去描述它会让人以为内容被藏起来了。
+    const pvGo = $('#pvGoSettings');
+    if (pvGo) pvGo.addEventListener('click', () => {
+      switchAdminView('settings');
+      const tab = $('.side-tab.on');
+      if (tab) tab.focus({ preventScroll: true });
     });
-    // 收起态：整张卡片就是「展开」按钮，点哪都行（此时卡内已无任何控件）
-    side.addEventListener('click', (e) => {
-      if (isSideOpen()) return;
-      if (e.target.closest('a, input, select, textarea')) return;
-      setSideOpen(true);
-    });
-    // 键盘可达：Tab 到卡片上回车 / 空格展开
-    side.addEventListener('keydown', (e) => {
-      if (isSideOpen()) return;
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setSideOpen(true);
-      }
-    });
-    const openBtn = $('#sideOpen');
-    if (openBtn) openBtn.addEventListener('click', () => setSideOpen(true));
-    // 预览工具条上的设置开关：一个按钮既是收起也是打开（贴合「设置就在预览右侧」的心智）
-    const pvSettings = $('#pvSettings');
-    if (pvSettings) pvSettings.addEventListener('click', () => setSideOpen(!isSideOpen()));
 
     // —— 预览工具条 ——
     const seg = $('#pvDeviceSeg');
@@ -2475,7 +2412,7 @@
       }
     });
 
-    // —— 侧栏内的任何交互：先把表单值收进 state，再推给预览（节流 120ms）——
+    // —— 设置页内的任何交互：先把表单值收进 state，再推给预览（节流 120ms）——
     // 这样开关 / 分段按钮这类「只在保存时才读值」的控件也能即时预览。
     let timer = null;
     const schedule = () => {
@@ -2494,11 +2431,11 @@
       clearTimeout(timer);
       timer = setTimeout(pushPreview, 120);
     };
-    side.addEventListener('click', (e) => { if (e.target.closest('.seg-btn, button, .switch')) schedule(); });
-    side.addEventListener('input', schedule);
-    side.addEventListener('change', schedule);
+    panel.addEventListener('click', (e) => { if (e.target.closest('.seg-btn, button, .switch')) schedule(); });
+    panel.addEventListener('input', schedule);
+    panel.addEventListener('change', schedule);
 
-    // 分类面板里的「常用收藏」开关不在 side 容器内，上面那三个委托监听收不到它，
+    // 分类面板里的「常用收藏」开关不在设置页容器内，上面那三个委托监听收不到它，
     // 单独接一份：先把值同步给主开关，再走同一套 collectSettings + 预览推送。
     const favCatSw = $('#setShowFavoritesCat');
     if (favCatSw) {
@@ -2557,10 +2494,10 @@
       if (notice) notice.style.display = 'none';
       return true;
     }
-    // 非管理员：隐藏全部管理面板与右侧设置侧栏，只留提示。
+    // 非管理员：隐藏全部管理面板（含已并入主区的「系统设置」页），只留提示。
     // .admin-nav 也要一起藏 —— 它是后加的左侧导航，不是 .panel，
     // 漏掉就会给普通用户留一排「点了没反应」的图标。
-    document.querySelectorAll('.panel, .studio-side, .admin-nav').forEach((p) => { p.style.display = 'none'; });
+    document.querySelectorAll('.panel, .admin-nav').forEach((p) => { p.style.display = 'none'; });
     if (notice) {
       const u = $('#roleNoticeUser');
       if (u) u.textContent = (me && (me.nickname || me.user)) || state.meUser;

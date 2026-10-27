@@ -255,7 +255,17 @@
     window.addEventListener('message', (e) => {
       if (e.origin !== location.origin) return;   // 只认同源后台推来的数据
       const d = e.data;
-      if (!d || d.type !== 'nav-preview-data') return;
+      if (!d) return;
+      /* 后台从「系统设置」页切回「首页预览」时会发这一条：iframe 在设置页期间是
+         display:none，隐藏文档里 rAF / 定时器都会被节流甚至暂停，字号改完量不出
+         顶栏高度 → --top-h 停在旧值（实测 104 vs 实际 189），切回来吸顶就错位。
+         这里收到重新同步的信号，补算一次即可。 */
+      if (d.type === 'nav-preview-resync') {
+        scheduleSyncTopHeight();
+        try { initScrollSpy(); } catch (err) {}
+        return;
+      }
+      if (d.type !== 'nav-preview-data') return;
       try { applyPreviewData(d.data); } catch (err) {}
     });
   }
@@ -520,6 +530,20 @@
     const run = () => { try { syncTopHeight(); } catch (e) {} };
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
     else run();
+    /* 兜底：后台把「系统设置」做成独立一页之后，切到设置页时预览 iframe 是
+       display:none —— **隐藏文档里的 requestAnimationFrame 会被浏览器暂停**，
+       于是改字号时那条 rAF 永远不跑，--top-h 一直停在旧值（实测 104 对 189），
+       切回预览页也不会自己补。定时器不受隐藏影响，补一发即可。
+       60ms 是量出来的：字号变量在 applyTypography 里同步落地，一帧后就量得准。 */
+    setTimeout(run, 60);
+  }
+
+  /* 预览 iframe 从隐藏恢复显示时（后台在设置页 ↔ 预览页之间来回切），
+     子文档的可见性会跟着变。变回可见时补算一次，避免带着旧的 --top-h 渲染。 */
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleSyncTopHeight();
+    });
   }
 
   /* ---------- 分类层级（支持 1~3 级） ---------- */
