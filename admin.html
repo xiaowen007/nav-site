@@ -4,9 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610271822" />
+  <link rel="stylesheet" href="css/style.css?v=202610271930" />
   <style>
-    .admin { max-width: 1560px; margin: 0 auto; padding: 16px 20px 70px; }
+    /* 宽度上限：原 1560px 在 1920 屏上左右各空 180px，预览区被白白压窄。
+       提到 1720px，配合右侧面板的 vw 自适应，宽屏才能真正用满。
+       底部留白 70px → 40px：那是纯留白（保存按钮在顶栏，不是悬浮底栏），
+       收掉 30px 直接换算成预览框的高度。 */
+    .admin { max-width: 1720px; margin: 0 auto; padding: 16px 20px 40px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
       box-shadow: var(--shadow); padding: 18px; margin-bottom: 18px; }
     .panel h2 { font-size: 15px; margin: 0 0 14px; display:flex; align-items:center; gap:8px; }
@@ -477,7 +481,15 @@
     .ask-err { min-height: 19px; font-size: 12.5px; font-weight: 600; color: #e8543f; padding-top: 2px; }
     .ask-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 
-    /* —— 首页预览 —— */
+    /* —— 首页预览 ——
+       高度自适应：原来 iframe 写死 580px / 556px，与视口高度无关。
+       实测 1366×768 整页要高 206px、1280×800 高 193px —— 小笔记本上预览框
+       底部必然被切，得滚一下才看得全，而「看全首页」正是这个面板存在的理由。
+       改成跟着 100vh 走。约束是「预览框底部约与右侧侧栏底部齐平」：
+       预览上方固定占位（顶栏 + 页头 + 工具条 + 提示 + 底部留白）约 300px，
+       另留 60px 余量给提示文字在窄屏下换行，故取 calc(100vh - 360px)。
+       下限 300px 是给 1366×768 / 1280×800 这类小笔记本留的余量 —— 低于这个高度
+       预览就只剩一条缝，不如让它稍微超出、允许滚一点。 */
     .pv-panel { padding: 14px 16px 16px; }
     .pv-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
     .pv-head h2 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
@@ -496,21 +508,29 @@
     .pv-device iframe { display: block; border: none; background: #fff; }
     /* 桌面：铺满容器宽度 */
     .pv-device.desk { width: 100%; }
-    .pv-device.desk iframe { width: 100%; height: 580px; }
-    /* 移动：手机外框 + 窄视口，让首页走移动端断点 */
+    .pv-device.desk iframe { width: 100%; height: clamp(300px, calc(100vh - 360px), 760px); }
+    /* 移动：手机外框 + 窄视口，让首页走移动端断点。
+       高度同样跟视口走（手机框本身还有 8px 上下内边距，故多减 20px）。 */
     .pv-device.mob { width: 340px; padding: 8px; border-radius: 28px; background: #1f2933; border-color: #1f2933; }
-    .pv-device.mob iframe { width: 100%; height: 556px; border-radius: 21px; }
+    .pv-device.mob iframe { width: 100%; height: clamp(300px, calc(100vh - 378px), 720px); border-radius: 21px; }
     .pv-tip { margin: 10px 0 0; }
 
-    /* —— 右侧系统设置 —— */
+    /* —— 右侧系统设置 ——
+       宽度原来写死 372px：在 1280 屏上把预览区压到 613px，在 1920 屏上又显得
+       空荡。改成跟着视口走 —— 窄屏 330px 省出空间给预览，宽屏 400px 让表单更舒展。 */
     .studio-side {
-      width: 372px; flex: none;
+      width: clamp(330px, 24vw, 400px); flex: none;
       position: sticky; top: calc(var(--top-h, 60px) + 12px);
       /* 窄屏下展开时会被 scrollIntoView 拉过来，留出吸顶栏的高度免得被盖住 */
       scroll-margin-top: calc(var(--top-h, 60px) + 12px);
-      /* 高度上限按「顶栏 + 页头 + 底部留白」估算，让侧栏在首屏就能整块看全
-         （含底部的「取消 / 保存设置」）；屏幕太矮时保底 420px，靠内部滚动兜住。 */
-      max-height: max(420px, calc(100vh - var(--top-h, 60px) - 108px));
+      /* 高度上限：让侧栏底部正好落在「视口底部 - 40px 页面留白」上，整块在首屏可见
+         （含底部的「取消 / 保存设置」）。
+         这里的 130 不是拍脑袋：侧栏文档流顶部 = 顶栏 + 16(admin 上内边距) +
+         60(页头) + 14(页头下外边距) = 顶栏 + 90，再加页面底部 40 留白 →
+         总共要从 100vh 里扣掉「顶栏 + 130」。原先是减 108，差出 22px，
+         表现为整页永远多出 22px 可滚高度（7 种视口实测都恒定 22，正是这个误差）。
+         屏幕太矮时保底 420px，靠内部滚动兜住。 */
+      max-height: max(420px, calc(100vh - var(--top-h, 60px) - 130px));
       display: flex; flex-direction: column;
       background: var(--panel); border: 1px solid var(--border);
       border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
@@ -1438,9 +1458,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202610271822"></script>
-  <script src="js/totop.js?v=202610271822"></script>
-  <script src="js/wallpapers.js?v=202610271822"></script>
-  <script src="js/admin.js?v=202610271822"></script>
+  <script src="js/logos.js?v=202610271930"></script>
+  <script src="js/totop.js?v=202610271930"></script>
+  <script src="js/wallpapers.js?v=202610271930"></script>
+  <script src="js/admin.js?v=202610271930"></script>
 </body>
 </html>

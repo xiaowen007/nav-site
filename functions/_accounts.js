@@ -16,6 +16,13 @@ const PBKDF2_ITER = 100000;          // 密码派生迭代次数（WebCrypto PBK
 export const ROLE_ADMIN = 'admin';
 export const ROLE_USER = 'user';
 
+// 管理员「重置密码」时使用的默认密码。
+// 运营诉求：管理员只负责把密码打回一个统一值，然后口头告知本人，不必每次现编一个。
+// 前端 js/admin.js 里的 DEFAULT_RESET_PASSWORD 必须与此保持一致（有测试断言守着）。
+// ⚠️ 这是**固定值**，知道用户名的人都能猜中 —— 部署到公网时请配合「首次登录强制改密」
+// 之类的流程，或至少定期人工巡查。改这里只需改这一处（前端不传 password 时后端兜底）。
+export const DEFAULT_RESET_PASSWORD = 'yw654321';
+
 // 账户状态机：pending(待审核) -> active(正常) / rejected(审核拒绝)；active 可被 disabled(禁用)
 export const ST_PENDING = 'pending';
 export const ST_ACTIVE = 'active';

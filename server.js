@@ -136,6 +136,8 @@ const PBKDF2_ITER = 100000;
 
 const ROLE_ADMIN = 'admin';
 const ROLE_USER = 'user';
+// 管理员重置密码时的默认值 —— 必须与 functions/_accounts.js 的同名常量一致
+const DEFAULT_RESET_PASSWORD = 'yw654321';
 // 账户状态机：pending(待审核) -> active(正常) / rejected(审核拒绝)；active 可被 disabled(禁用)
 const ST_PENDING = 'pending';
 const ST_ACTIVE = 'active';
@@ -1050,6 +1052,8 @@ const server = http.createServer(async (req, res) => {
       const me = resolveIdentity(req);
       const isSelf = me && me.user === acc.username;
       const note = String((body && body.note) || '').trim().slice(0, 100);
+      // 重置密码时记录实际生效的值，随响应回给管理员
+      let resetPwd = '';
 
       // 防锁死：不能对自己降级/禁用；不能让可用管理员归零
       if (isSelf && ['demote', 'disable'].includes(action)) {
@@ -1079,14 +1083,19 @@ const server = http.createServer(async (req, res) => {
         if (!nick) return sendJSON(res, 400, { error: '昵称不能为空' });
         acc.nickname = nick;
       } else if (action === 'resetPassword') {
-        const pwd = String((body && body.password) || '');
+        // 与 functions/api/accounts/[id].js 同构：未指定密码时统一打回默认值
+        const pwd = String((body && body.password) || '').trim() || DEFAULT_RESET_PASSWORD;
         const err = validatePassword(pwd);
         if (err) return sendJSON(res, 400, { error: err });
         const h = await hashPassword(pwd);
         acc.salt = h.salt; acc.iter = h.iter; acc.passHash = h.passHash;
+        resetPwd = pwd;
       }
       saveAccounts(list);
-      return sendJSON(res, 200, { ok: true, action, actionText: ACTIONS[action], account: publicAccount(acc) });
+      return sendJSON(res, 200, {
+        ok: true, action, actionText: ACTIONS[action], account: publicAccount(acc),
+        ...(resetPwd ? { password: resetPwd } : {})
+      });
     }
 
     // DELETE /api/accounts/:id -> 删除账户

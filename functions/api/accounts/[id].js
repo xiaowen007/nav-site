@@ -4,7 +4,7 @@ import { sendJSON, readBody, hasKV, bindingErrorResponse } from '../../_lib.js';
 import {
   requireAdmin, loadAccounts, saveAccounts, publicAccount, hashPassword,
   resolveIdentity, validatePassword, ROLE_ADMIN, ROLE_USER,
-  ST_ACTIVE, ST_PENDING, ST_DISABLED, ST_REJECTED
+  ST_ACTIVE, ST_PENDING, ST_DISABLED, ST_REJECTED, DEFAULT_RESET_PASSWORD
 } from '../../_accounts.js';
 
 // 动作表：把「受支持的改动」集中在一处，避免散落的字符串判断
@@ -52,6 +52,8 @@ export async function onRequestPatch(context) {
     const me = await resolveIdentity(request, env);
     const isSelf = me && me.user === acc.username;
     const note = String((body && body.note) || '').trim().slice(0, 100);
+    // 重置密码时把实际生效的密码记下来，随响回给管理员
+    let resetPwd = '';
 
     // —— 防锁死：不能把自己降级/禁用/删除；不能让管理员数量归零 ——
     const wouldLoseAdmin = ['demote', 'disable'].includes(action) && acc.role === ROLE_ADMIN;
@@ -97,17 +99,26 @@ export async function onRequestPatch(context) {
         break;
       }
       case 'resetPassword': {
-        const pwd = String((body && body.password) || '');
+        // 管理员重置：不再要求现编一个密码，未指定时统一打回默认值
+        // （运营诉求：管理员只需把密码打回一个统一值再口头告知本人）。
+        // 显式传了 password 仍按传入值处理，保留脚本化调用的余地。
+        const pwd = String((body && body.password) || '').trim() || DEFAULT_RESET_PASSWORD;
         const err = validatePassword(pwd);
         if (err) return sendJSON({ error: err }, 400);
         const h = await hashPassword(pwd);
         acc.salt = h.salt; acc.iter = h.iter; acc.passHash = h.passHash;
+        // 记下实际设成什么，回包告诉管理员（他要把这个值告知本人）
+        resetPwd = pwd;
         break;
       }
     }
 
     await saveAccounts(env, list);
-    return sendJSON({ ok: true, action, actionText: ACTIONS[action], account: publicAccount(acc) });
+    return sendJSON({
+      ok: true, action, actionText: ACTIONS[action], account: publicAccount(acc),
+      // 仅重置密码时回传，前端据此提示「已设为 xxxx」。密码本身不进 account 对象
+      ...(resetPwd ? { password: resetPwd } : {})
+    });
   } catch (e) {
     const r = bindingErrorResponse(e);
     if (r) return r;

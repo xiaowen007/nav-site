@@ -7,6 +7,11 @@
   const $ = (s) => document.querySelector(s);
   const TOKEN_KEY = 'navAdminToken';
 
+  // 管理员「重置密码」的默认值。必须与 functions/_accounts.js 的
+  // DEFAULT_RESET_PASSWORD 保持一致（nav_admin_reset_default 测试会逐字比对两个文件）。
+  // 实际生效值以后端回包里的 password 为准 —— 这里只用于确认弹窗的预览文案。
+  const DEFAULT_RESET_PASSWORD = 'yw654321';
+
   const state = {
     data: null,
     activeCatId: null,
@@ -2121,6 +2126,7 @@
   function submitAsk() {
     const cfg = askCfg;
     if (!cfg) return;
+    if (cfg.kind === 'confirm') { closeAsk(true); return; }
     if (cfg.kind === 'text') {
       const inp = $('#askInput0');
       const v = inp ? String(inp.value || '').trim() : '';
@@ -2144,6 +2150,10 @@
     if (askResolve) closeAsk(null);            // 上一个没关就先关掉，避免 resolver 泄漏
     askCfg = cfg;
     $('#askTitle').textContent = cfg.title || '输入';
+    // 按钮文案随场景走：「确定重置」比笼统的「确定」更容易确认自己点的是什么
+    const okBtn = $('#askOk'), cancelBtn = $('#askCancel');
+    if (okBtn) okBtn.textContent = cfg.okText || '确定';
+    if (cancelBtn) cancelBtn.textContent = cfg.cancelText || '取消';
     const desc = $('#askDesc');
     desc.textContent = cfg.desc || '';
     desc.style.display = cfg.desc ? '' : 'none';
@@ -2151,7 +2161,31 @@
     const box = $('#askFields');
     box.innerHTML = '';
 
-    if (cfg.kind === 'text') {
+    if (cfg.kind === 'confirm') {
+      // 确认型：不收集任何输入，只把后果讲清楚 → 返回 true / false。
+      // 为什么不用原生 confirm()：它一旦被浏览器「阻止对话框」拦掉就永远返回
+      // false —— 表现是「点了没反应」，正是重置密码被反馈「无效」的老根因。
+      const tip = document.createElement('div');
+      tip.className = 'ask-rule';
+      tip.style.fontSize = '13px';
+      tip.style.lineHeight = '1.8';
+      tip.style.color = 'var(--text)';
+      (cfg.lines || []).forEach((ln) => {
+        const p = document.createElement('div');
+        // 对象形式 { strong, tone } 单独一行加粗；一律走 textContent，
+        // 绝不把账号昵称这类用户数据拼进 innerHTML
+        if (ln && typeof ln === 'object') {
+          const s = document.createElement('b');
+          s.textContent = ln.strong;
+          if (ln.tone === 'warn') s.style.color = '#e8543f';
+          p.appendChild(s);
+        } else {
+          p.textContent = ln;
+        }
+        tip.appendChild(p);
+      });
+      box.appendChild(tip);
+    } else if (cfg.kind === 'text') {
       const wrap = document.createElement('div');
       wrap.className = 'ask-field';
       const lb = document.createElement('label');
@@ -2206,7 +2240,8 @@
     mask.style.display = 'flex';
     return new Promise((resolve) => {
       askResolve = resolve;
-      const first = box.querySelector('input');
+      // confirm 型没有输入框，焦点落到主按钮上（键盘用户不用先 Tab 一圈）
+      const first = box.querySelector('input') || okBtn;
       if (first) setTimeout(() => { try { first.focus(); } catch (e) {} }, 20);
     });
   }
@@ -2218,6 +2253,41 @@
   // 新密码 + 确认：返回密码串，取消返回 null
   function askPassword(cfg) {
     return openAsk(Object.assign({ kind: 'password' }, cfg || {}));
+  }
+  // 确认型（无输入）：确定返回 true，取消 / Esc / 点遮罩返回 false。
+  // Esc 分支给的是 null，这里统一收敛成布尔值，调用方只需判断 truthy。
+  function askConfirm(cfg) {
+    return openAsk(Object.assign({ kind: 'confirm' }, cfg || {})).then((v) => v === true);
+  }
+
+  /* ================= 顶栏高度 → --top-h =================
+   * admin.html 里导航栏与右侧设置面板都用 `top: calc(var(--top-h, 60px) + 12px)`
+   * 吸顶，但 **--top-h 从来没被写过值**，一直吃 fallback 的 60px。而实际顶栏
+   * 高度随字号/缩放/是否换行在 50~64px 之间浮动 —— 差出来的那十几像素表现为
+   * 「面板吸顶后头顶空一块」，窗口变窄后更明显。
+   * 这里把实测高度回写进去，和前台 app.js 的 syncTopHeight 是同一套做法。 */
+  function syncTopHeight() {
+    const tb = document.querySelector('.topbar');
+    if (!tb) return;
+    const root = document.documentElement;
+    // 先摘掉行内值再量：顶栏自身若有 min-height 依赖它，留着上次的值会形成
+    // 「棘轮」——窄变宽时永远回不到矮的那一档
+    root.style.removeProperty('--top-h');
+    const h = Math.round(tb.getBoundingClientRect().height);
+    if (h > 0) root.style.setProperty('--top-h', h + 'px');
+  }
+
+  function bindTopHeight() {
+    syncTopHeight();
+    let t = null;
+    window.addEventListener('resize', () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(syncTopHeight, 160);
+    });
+    // 字体晚加载完会让顶栏换行、高度变化，量一次兜底
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => syncTopHeight()).catch(() => {});
+    }
   }
 
   function bindAskModal() {
@@ -2331,8 +2401,16 @@
        之前把 collapsed 写进 localStorage，导致「上次手滑收起一次 → 之后每次进后台
        都是收起态」，用户只会觉得「设置没了、找不到」（真实反馈）。收起是**临时**动作，
        不该跨会话生效；本次会话里收起了，也随时能靠卡片 / 顶栏「⚙ 展开设置」/
-       预览工具条「⚙ 打开设置」呼出来。 */
-    setSideOpen(true, { silent: true });
+       预览工具条「⚙ 打开设置」呼出来。
+
+       例外：窄屏（≤1180px，见 CSS 里那条 media query）下侧栏排在预览**下方**，
+       且 max-height:none、内部不滚动 —— 展开时整块撑开，页面高度实测 3400px 以上，
+       要连滚好几屏才看得到面板尾部。这种屏上默认收起成一张小卡片，
+       页面高度立刻回到一屏多；要看设置点一下「⚙ 设置」即可。
+       只在**初始化时**判一次，不监听 resize 强收：用户正开着设置时缩小窗口，
+       面板突然消失比页面变长更让人困惑。 */
+    const narrow = window.matchMedia('(max-width: 1180px)').matches;
+    setSideOpen(!narrow, { silent: true });
 
     $('#sideTabs').addEventListener('click', (e) => {
       const b = e.target.closest('.side-tab');
@@ -2604,26 +2682,36 @@
       body.note = note;
     }
     if (action === 'resetPassword') {
-      // 关键修复：原来 prompt 返回 null（被拦截 / 用户取消）时直接 return，
-      // 界面上没有任何反馈，看起来就像「按钮坏了」。现在用自定义弹窗：
-      // 双输入确认 + 密码显隐 + 前端同规则校验，成功后还会 toast 提示。
-      const pwd = await askPassword({
+      // 需求变更：管理员不再现编密码，统一打回系统默认值。
+      // 所以这里不收集输入，只把「会变成什么密码、旧密码立即失效」讲清楚再确认。
+      // 仍然走自定义弹窗而不是原生 confirm()：后者被浏览器「阻止对话框」拦掉后
+      // 永远返回 false，又回到「点了没反应」的老问题。
+      const okReset = await askConfirm({
         title: '重置密码',
-        desc: '为「' + (acc.nickname || acc.username) + '」（账号 ' + acc.username + '）设置新密码。'
+        desc: '即将把下列账户的密码重置为系统默认密码：',
+        lines: [
+          { strong: (acc.nickname || acc.username) + '（' + acc.username + '）' },
+          '新密码：' + DEFAULT_RESET_PASSWORD,
+          { strong: '旧密码会立即失效，请把新密码告知本人。', tone: 'warn' }
+        ],
+        okText: '确定重置'
       });
-      if (!pwd) return;   // 用户主动取消
-      body.password = pwd;
+      if (!okReset) return;
+      // 不传 password，交给后端用默认值兜底 —— 默认密码只在服务端定义一处更安全，
+      // 也避免前端版本落后时把旧默认值推上去
     }
     if (action === 'disable' && !confirm('确定禁用「' + acc.username + '」？其登录状态会立即失效。')) return;
 
     try {
-      await api('/api/accounts/' + encodeURIComponent(id), 'PATCH', body);
+      const r = await api('/api/accounts/' + encodeURIComponent(id), 'PATCH', body);
       await loadAccounts();
       // 原来成功了什么都不说，而列表外观也不会变（密码本来就不显示在列表里），
       // 于是「点了没反应 = 功能坏了」。这一行提示是本次修复的一半。
+      // 重置密码这条尤其要把**实际生效的新密码**说出来 —— 管理员得照着念给用户。
       toast(action === 'resetPassword'
-        ? '已重置「' + (acc.nickname || acc.username) + '」的密码，请把新密码告知本人（旧密码已失效）'
-        : label + '成功：' + (acc.nickname || acc.username), 4600);
+        ? '已把「' + (acc.nickname || acc.username) + '」的密码重置为 '
+          + ((r && r.password) || DEFAULT_RESET_PASSWORD) + '，请告知本人（旧密码已失效）'
+        : label + '成功：' + (acc.nickname || acc.username), 5200);
     } catch (e) { alert(label + '失败：' + e.message); }
   }
 
@@ -2755,6 +2843,7 @@
     initAdminNav();     // 立刻恢复上次的区块与收缩状态（不能等登录后才做，
                         // 否则未登录/普通用户会看到 6 个区块同时展开的旧样子）
     bindAskModal();     // 通用输入弹窗（替代 window.prompt）
+    bindTopHeight();    // 顶栏实测高度 → --top-h（吸顶面板的偏移基准）
     bindAccountsUI();   // ⑩ 账户管理 / ⑪ 申请审核 的刷新与筛选（元素缺失时内部自动跳过）
 
     $('#addCat').addEventListener('click', addCat);
