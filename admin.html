@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台管理 · 共享导航</title>
-  <link rel="stylesheet" href="css/style.css?v=202610272028" />
+  <link rel="stylesheet" href="css/style.css?v=202610281943" />
   <style>
     /* 宽度上限：原 1560px 在 1920 屏上左右各空 180px，预览区被白白压窄。
        提到 1720px，配合右侧面板的 vw 自适应，宽屏才能真正用满。
@@ -515,115 +515,100 @@
     .pv-device.mob iframe { width: 100%; height: clamp(300px, calc(100vh - 378px), 720px); border-radius: 21px; }
     .pv-tip { margin: 10px 0 0; }
 
-    /* —— 右侧系统设置 ——
-       宽度原来写死 372px：在 1280 屏上把预览区压到 613px，在 1920 屏上又显得
-       空荡。改成跟着视口走 —— 窄屏 330px 省出空间给预览，宽屏 400px 让表单更舒展。 */
-    .studio-side {
-      width: clamp(330px, 24vw, 400px); flex: none;
-      position: sticky; top: calc(var(--top-h, 60px) + 12px);
-      /* 窄屏下展开时会被 scrollIntoView 拉过来，留出吸顶栏的高度免得被盖住 */
-      scroll-margin-top: calc(var(--top-h, 60px) + 12px);
-      /* 高度上限：让侧栏底部正好落在「视口底部 - 40px 页面留白」上，整块在首屏可见
-         （含底部的「取消 / 保存设置」）。
-         这里的 130 不是拍脑袋：侧栏文档流顶部 = 顶栏 + 16(admin 上内边距) +
-         60(页头) + 14(页头下外边距) = 顶栏 + 90，再加页面底部 40 留白 →
-         总共要从 100vh 里扣掉「顶栏 + 130」。原先是减 108，差出 22px，
-         表现为整页永远多出 22px 可滚高度（7 种视口实测都恒定 22，正是这个误差）。
-         屏幕太矮时保底 420px，靠内部滚动兜住。 */
-      max-height: max(420px, calc(100vh - var(--top-h, 60px) - 130px));
-      display: flex; flex-direction: column;
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
-      /* 过渡写在基础样式上（而不是 .collapsed 里）：类一摘掉属性就失效，
-         那样只有"收起"有动画、"展开"是硬跳。 */
-      transition: width .2s ease, transform .16s ease, box-shadow .18s ease, border-color .18s ease;
+    /* —— ⚙ 系统设置（左侧导航第 2 项 → 铺满右侧的一整页）——
+       它原来是 .studio 右侧一条 330~400px 的 sticky 抽屉，收起时缩成小卡片。
+       抽屉形态的硬伤：宽度被钉死，五组设置只能一列竖排，表单挤在 300px 里；
+       展开时还一直和预览抢横向空间。
+       搬进主区之后：分组卡片按面板宽度自动排 1/2/3 列（见 .side-view.on 的
+       auto-fit），宽屏的横向空间归设置页自己用。将来若把 5 个标签拆成各自
+       独立的导航页，也只需再挂几个 data-view，栅格不用重写。 */
+    .settings-panel { padding: 0; }
+
+    /* 头部：标题在左，状态 + 取消 / 保存设置在右。
+       做成吸顶是必须的：抽屉时代这两个按钮钉在底部操作栏，「滚到壁纸库底部
+       还能点保存」是靠内部滚动 + 固定 foot 实现的；整页之后必须自己吸住，
+       否则改完壁纸要滚回页头才能保存。 */
+    .settings-head {
+      position: sticky; top: var(--top-h, 60px); z-index: 6;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: var(--radius) var(--radius) 0 0;
     }
-    /* 收起 ≠ 消失（用户要求）：面板原地缩成一张小卡片，点它随时展开。
-       相比「display:none 掉、再去别处找按钮打开」，卡片不会离开视线，
-       也就不存在「点了 ✕ 就再也找不回来」的观感。 */
-    .studio-side.collapsed {
-      width: 212px;
-      cursor: pointer;
-      border-color: var(--primary);
-      box-shadow: 0 8px 24px rgba(20, 30, 50, .13);
+    .settings-head .shp-title { flex: 1; min-width: 180px; }
+    /* .panel h2 自带 margin-bottom:14px，这里要压掉，否则头部会虚高一行 */
+    .settings-head .shp-title h2 { margin: 0 0 3px; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+    .settings-head .shp-title .hint { margin: 0; }
+    .settings-head .shp-ops { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .settings-head .sf-status { font-size: 12px; color: var(--muted); }
+    .settings-head .sf-status.ok { color: #1aa179; }
+    .settings-head .sf-status.err { color: #e8543f; }
+    .settings-head .btn { border-radius: 9px; padding: 8px 18px; }
+
+    /* 标签栏：改成胶囊分段，并跟着头部一起吸顶。
+       top 的 57px = 头部高度（12+12 padding + 标题两行约 33），量出来的实际值；
+       写死比用 IntersectionObserver 简单，窄屏换行时头部变高也只差几像素。 */
+    .settings-panel .side-tabs {
+      position: sticky; top: calc(var(--top-h, 60px) + 57px); z-index: 5;
+      gap: 4px; padding: 8px 16px; background: var(--panel);
+      border-bottom: 1px solid var(--border);
     }
-    .studio-side.collapsed:hover {
-      transform: translateY(-2px); box-shadow: 0 12px 30px rgba(20, 30, 50, .19);
+    .settings-panel .side-tab {
+      padding: 7px 14px; border: 1px solid var(--border); border-radius: 16px;
+      border-bottom: 1px solid var(--border); margin-bottom: 0; background: var(--bg);
     }
-    .studio-side.collapsed:active { transform: translateY(0); }
-    .studio-side.collapsed:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    /* 卡片里只留标题：标签栏 / 正文 / 底部按钮全部收走 */
-    .studio-side.collapsed .side-tabs,
-    .studio-side.collapsed .side-body,
-    .studio-side.collapsed .side-foot { display: none; }
-    .studio-side.collapsed .side-head { padding: 13px 14px; border-bottom: none; }
-    /* 「收起 ✕」在卡片态没有意义（已经收起了），换成展开指引 */
-    .studio-side.collapsed .sh-close { display: none; }
-    .studio-side.collapsed .sh-title { display: flex; flex-direction: column; gap: 3px; }
-    .studio-side.collapsed .sh-title::after {
-      content: '点此展开 ▸';
-      font-size: 12px; font-weight: 500; color: var(--primary); letter-spacing: .2px;
+    .settings-panel .side-tab:hover { border-color: var(--primary); }
+    .settings-panel .side-tab.on {
+      border-color: var(--primary); color: var(--primary); background: var(--primary-soft);
     }
 
-    .side-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 12px 14px; border-bottom: 1px solid var(--border); }
-    .side-head .sh-title { font-size: 14px; font-weight: 600; }
-    /* 收起按钮：光一个 ✕ 太像「关闭 / 删除」，配上「收起」二字语义才明确，
-       鼠标悬停再补一句恢复方法（见 title 与 .sh-close 的 tooltip 文案）。 */
-    .sh-close {
-      margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
-      border: none; background: transparent; color: var(--muted);
-      cursor: pointer; font-size: 13px; line-height: 1; padding: 5px 9px; border-radius: 8px;
-      transition: background .15s, color .15s;
-    }
-    .sh-close .shc-x { font-size: 15px; }
-    .sh-close:hover { background: var(--bg); color: var(--text); }
-    .sh-close:active { transform: translateY(1px); }
-
-    .side-tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
-    .side-tabs::-webkit-scrollbar { display: none; }
-    .side-tab {
-      flex: none; border: none; background: transparent; cursor: pointer;
-      padding: 10px 9px 8px; font-size: 13px; color: var(--muted); white-space: nowrap;
-      border-bottom: 2px solid transparent; margin-bottom: -1px;
-      transition: color .12s, border-color .12s;
-    }
-    .side-tab:hover { color: var(--text); }
-    .side-tab.on { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
-
-    /* 头部 / 标签栏 / 底部操作栏固定不动，只有中间内容滚动。
-       flex:none 不能省：容器有 max-height，默认 flex-shrink:1 会把标签栏压扁变形。 */
-    .side-head, .side-tabs, .side-foot { flex: none; }
-    .side-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; }
-    /* 细滚动条：默认那条 15px 灰条在窄侧栏里太抢眼 */
-    .side-body::-webkit-scrollbar, .pv-stage::-webkit-scrollbar { width: 8px; height: 8px; }
-    .side-body::-webkit-scrollbar-track, .pv-stage::-webkit-scrollbar-track { background: transparent; }
-    .side-body::-webkit-scrollbar-thumb, .pv-stage::-webkit-scrollbar-thumb {
-      background: var(--border); border-radius: 4px;
-    }
-    .side-body::-webkit-scrollbar-thumb:hover, .pv-stage::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+    /* 内容区：整页滚动（不再面板内滚动 —— 那会把吸顶的头部顶出视口） */
+    .settings-panel .side-body { padding: 16px; }
     .side-view { display: none; }
-    .side-view.on { display: block; }
-    .side-view-head { display: flex; align-items: center; gap: 8px; margin: 2px 2px 10px; font-size: 12.5px; color: var(--muted); }
+    /* auto-fit：340px 一列 → 内容区 ≥700 时两列、≥1060 时三列，卡片自己长宽，
+       不需要为每个断点各写一条 media query */
+    /* 分列规则按「这个标签页里有几张卡」定，而不是一律 auto-fit：
+       auto-fit 只在**整条轨道全空**时才折叠，壁纸页第一行只有一张 1 列卡、
+       后两张跨列 → 第 2/3 条轨道被下一行占着，不折叠 → 首行右侧空掉两大块。
+       显式给每页列数最稳：首页 4 张卡排 2×2（3 列会落单一张）、壁纸页整行铺开、
+       AI/账号安全 2 列、卡片设置单列且限宽（6 行控件横跨 1454px 会很难读）。 */
+    .side-view.on {
+      display: grid; gap: 16px; align-items: start;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    }
+    .side-view.on[data-view="home"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .side-view.on[data-view="wall"] { grid-template-columns: minmax(0, 1fr); }
+    .side-view.on[data-view="ai"],
+    .side-view.on[data-view="sec"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .side-view.on[data-view="card"] { grid-template-columns: minmax(0, 1fr); }
+    .side-view.on[data-view="card"] > .settings-section { max-width: 860px; }
+    @media (max-width: 900px) {
+      .side-view.on,
+      .side-view.on[data-view="home"],
+      .side-view.on[data-view="ai"],
+      .side-view.on[data-view="sec"] { grid-template-columns: minmax(0, 1fr); }
+    }
+    .side-view-head {
+      display: flex; align-items: center; gap: 8px;
+      margin: 0 2px 4px; font-size: 12.5px; color: var(--muted);
+      grid-column: 1 / -1;
+    }
+    /* 跨列：壁纸库 / 预置壁纸本身就是大网格，独占一整行才用得开 */
+    .side-view.on > .gs-wide { grid-column: 1 / -1; }
 
-    /* 侧栏内的分组卡片：比宽屏版更紧凑，行改为「标签在上、控件在下」 */
-    .studio-side .settings-section { padding: 12px; margin-bottom: 12px; }
-    .studio-side .settings-section h4 { font-size: 13.5px; margin: 0 0 6px; }
-    /* 分组卡用 --bg（凹）、输入框用 --panel（亮），两种主题下都能拉开层次 */
-    .studio-side .settings-section input[type=text],
-    .studio-side .settings-section input[type=password],
-    .studio-side .settings-section input[type=number],
-    .studio-side .settings-section textarea,
-    .studio-side .settings-section select { background: var(--panel); }
-    .studio-side .settings-section h5 { margin: 12px 0 6px; padding-top: 10px; font-size: 12.5px; }
-    .studio-side .settings-row { display: block; padding: 8px 0; }
-    .studio-side .settings-row .srl { display: block; font-size: 12.5px; margin-bottom: 6px; }
-    .studio-side .settings-row.row-sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .studio-side .settings-row.row-sw .srl { margin-bottom: 0; }
-    .studio-side .settings-cols { grid-template-columns: 1fr; column-gap: 0; }
-    .studio-side .settings-cols > .settings-row { border-bottom: 1px dashed var(--border); padding: 8px 0; }
-    .studio-side .settings-cols > .settings-row:last-child { border-bottom: none; }
-    .studio-side .settings-row input[type=range] { max-width: none; }
-    .studio-side .seg-btn { padding: 5px 10px; }
+    /* 分组卡片之间的间距交给 grid gap，卡片自身不再留 bottom margin */
+    .settings-panel .settings-section { margin-bottom: 0; }
+    /* 容器查询：按「卡片自己的宽度」决定表单是块式还是三列栅格。
+       340px 的窄卡里用 180px 的标签列会挤成一团；跨列的大卡里块式又太浪费。 */
+    .settings-panel .settings-section { container-type: inline-size; }
+    @container (max-width: 460px) {
+      .settings-row { display: block; padding: 8px 0; }
+      .settings-row .srl { display: block; font-size: 12.5px; margin-bottom: 6px; }
+      .settings-row.row-sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .settings-row.row-sw .srl { margin-bottom: 0; }
+      .settings-cols { grid-template-columns: 1fr; column-gap: 0; }
+      .settings-row input[type=range] { max-width: none; }
+    }
     .sr-ctl { display: flex; align-items: center; gap: 8px; }
     .sr-ctl .hint { flex: none; min-width: 42px; text-align: right; }
 
@@ -643,8 +628,10 @@
     .logo-head .lh-txt { min-width: 0; }
     .logo-head .lh-txt b { display: block; font-size: 12.5px; }
     .logo-head .lh-txt span { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+    /* 列数跟着卡片宽度走：卡片 474px 时排 7 格、719px 时排 12 格，格子尺寸稳定在
+       50~60px。写死 7 列的话，宽卡片里每格会被撑到 96px，图标看着像走样。 */
     .logo-grid {
-      display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px;
     }
     .logo-pick {
       aspect-ratio: 1 / 1;
@@ -659,7 +646,7 @@
     }
     .logo-pick svg { width: 22px; height: 22px; display: block; }
     .logo-pick .lp-emoji { font-size: 19px; line-height: 1; }
-    @media (max-width: 1180px) { .logo-grid { grid-template-columns: repeat(6, 1fr); } }
+    @media (max-width: 1180px) { .logo-grid { grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); } }
     /* —— 卡片大小滑块：刻度条要正好落在滑轨下方 ——
        刻度只在「滑轨 + 拇指内缩」的宽度内排布，所以它必须和 range 同宽：
        把 range 与刻度一起放进 .csize-wrap（flex:1），右侧的档位文字留在 wrap 外面。
@@ -680,46 +667,22 @@
     /* 这一行的控件比文字高（滑轨 + 刻度两行），让档位文字与滑轨对齐而不是与整块居中 */
     .sr-ctl-top { align-items: flex-start; }
     .sr-ctl-top .hint { padding-top: 3px; }
-    /* 窄栏里列表行折成两行：名称 + 删除按钮一行，长的输入框另起一行 */
-    .studio-side .font-row, .studio-side .engine-row { flex-wrap: wrap; }
-    .studio-side .font-row .ft-name, .studio-side .engine-row .eg-name { flex: 1 1 auto; }
-    .studio-side .font-row .ft-stack, .studio-side .engine-row .eg-url { flex: 1 1 100%; order: 3; }
+    /* 字体 / 引擎列表行：卡片可能只有 340px 宽，长的输入框另起一行 */
+    .settings-panel .font-row, .settings-panel .engine-row { flex-wrap: wrap; }
+    .settings-panel .font-row .ft-name, .settings-panel .engine-row .eg-name { flex: 1 1 auto; }
+    .settings-panel .font-row .ft-stack, .settings-panel .engine-row .eg-url { flex: 1 1 100%; order: 3; }
 
-    .side-foot { border-top: 1px solid var(--border); padding: 10px 12px; background: var(--panel); }
-    .sf-status { min-height: 16px; margin-bottom: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .sf-status { min-height: 16px; font-size: 12px; color: var(--muted); line-height: 1.5; }
     .sf-status.ok { color: #1aa179; }
     .sf-status.err { color: #e8543f; }
     .sf-btns { display: flex; gap: 8px; justify-content: flex-end; }
     .sf-btns .btn { border-radius: 9px; padding: 8px 18px; }
 
-    /* —— 设置面板的「收起 / 展开」——
-       主入口是**原地缩成的那张卡片**（见 .studio-side.collapsed）：收起后
-       它仍待在原处、带着「点此展开 ▸」，不存在「找不回来」这回事。
-       另外两处只是辅助入口，状态由 js 的 setSideOpen() 统一同步：
-         ① 顶栏「⚙ 系统设置」——吸顶，滚到页面最底下也点得到
-         ② 预览工具条「⚙ 打开设置」——视线本来就在预览区，最顺手
-       三者都不再用动画闪烁去抢注意力：卡片已经足够显眼，闪反而吵。 */
-    .btn.side-open { display: none; }
-    .btn.side-open.show { display: inline-block; }
-
-    /* 预览工具条上的设置开关：收起态高亮成主色，提示「面板已收起，点我展开」 */
-    .pv-side-btn.on {
-      background: var(--primary); color: #fff; border-color: var(--primary);
-    }
-    .pv-side-btn.on:hover { opacity: .92; }
-
-    /* 首次进页面时滑入；收起/展开是宽度在动（不再是 display 切换）。 */
-    @keyframes sideIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
-    .studio-side { animation: sideIn .22s ease; }
-    /* 收起状态下左侧会拉通全宽，给个过渡减弱「布局突然一跳」的感觉 */
-    .studio-main { transition: width .18s ease; }
-
+    /* 窄屏：设置面板的头部会换行变高，标签栏的吸顶偏移跟着放宽一点，
+       避免标签栏被头部压住半个身位。 */
     @media (max-width: 1180px) {
-      .studio { display: block; }
-      .studio-side { width: auto; position: static; max-height: none; margin-top: 16px; }
-      .side-body { max-height: none; overflow: visible; }
-      /* 窄屏下侧栏排在预览下方，收起态收成一张左对齐的小卡片（而不是整行横条） */
-      .studio-side.collapsed { width: auto; max-width: 272px; }
+      .settings-head { position: static; }
+      .settings-panel .side-tabs { position: static; }
     }
   </style>
 </head>
@@ -737,7 +700,6 @@
       <button class="btn sm ghost" id="clearCacheBtn" type="button">清除</button>
       <span class="cc-status" id="cacheStatus"></span>
     </div>
-    <button class="btn sm side-open" id="sideOpen" type="button" title="展开右侧「系统设置」面板（收起态下它就是一张小卡片，点卡片也能展开）">⚙ 展开设置</button>
     <button class="btn save-top" id="saveAll" title="保存全部更改（Ctrl / ⌘ + S）">💾<span class="st-txt"> 保存更改</span></button>
     <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色">🌓</button>
     <a class="admin-link" href="index.html">← 返回导航</a>
@@ -788,7 +750,7 @@
     <div class="admin-head">
       <div class="ah-main">
         <h1>导航站后台管理</h1>
-        <p class="hint">用左侧导航切换区块：<b>首页预览</b>看效果、<b>导航数据</b>管分类与链接、<b>账户 / 申请审核</b>管人；右侧「系统设置」里改标题、卡片、壁纸与 AI。导航栏可收缩成只留图标。</p>
+        <p class="hint">用左侧导航切换区块：<b>首页预览</b>看效果、<b>系统设置</b>改标题 / 卡片 / 壁纸 / AI、<b>导航数据</b>管分类与链接、<b>账户 / 申请审核</b>管人。导航栏可收缩成只留图标。</p>
       </div>
       <a class="back" href="index.html">返回首页</a>
     </div>
@@ -805,6 +767,14 @@
         <button class="nav-item on" type="button" data-view="pv" title="首页预览">
           <span class="ni-icon" aria-hidden="true">🖥️</span><span class="ni-txt">首页预览</span>
         </button>
+        <!-- 「系统设置」是左侧导航的第 2 项（原来钉在右侧窄抽屉里）。
+             搬进来的理由：抽屉宽度被锁在 330~400px，五组设置只能一列竖排，
+             表单被压得很窄、还长期和预览抢横向空间。现在它就是主区里的一整页，
+             分组卡片可以按宽度自动排成 2~3 列，将来每组独立成页也只是多几个入口。 -->
+        <button class="nav-item" type="button" data-view="settings" title="系统设置（外观 / 壁纸 / AI / 账号安全）">
+          <span class="ni-icon" aria-hidden="true">⚙️</span><span class="ni-txt">系统设置</span>
+        </button>
+        <div class="nav-sep" aria-hidden="true"></div>
         <button class="nav-item" type="button" data-view="1" title="导航数据管理">
           <span class="ni-icon" aria-hidden="true">📚</span><span class="ni-txt">导航数据</span>
         </button>
@@ -824,11 +794,6 @@
           <span class="ni-badge zero" id="navAppBadge" aria-hidden="true"></span>
         </button>
         <div class="nav-sep" aria-hidden="true"></div>
-        <!-- 「系统设置」不参与视图切换：它打开的是右侧那块面板（跟预览联动，
-             所以留在右边而不是搬进中间）。 -->
-        <button class="nav-item" type="button" id="navSettings" title="打开右侧「系统设置」面板">
-          <span class="ni-icon" aria-hidden="true">⚙️</span><span class="ni-txt">系统设置</span>
-        </button>
         <button class="nav-toggle" type="button" id="navToggle" title="收起导航栏（只留图标）">
           <span class="ni-icon" aria-hidden="true" id="navToggleIcon">«</span>
           <span class="nt-txt">收起导航</span>
@@ -848,7 +813,7 @@
               </div>
               <button class="btn sm ghost" id="pvRefresh" type="button" title="重新加载预览">↻ 刷新</button>
               <button class="btn sm ghost" id="pvOpen" type="button" title="在新标签页打开首页">↗ 新窗口</button>
-              <button class="btn sm ghost pv-side-btn" id="pvSettings" type="button" title="收起 / 打开右侧的「系统设置」面板">⚙ 收起设置</button>
+              <button class="btn sm ghost" id="pvGoSettings" type="button" title="跳到「系统设置」页改标题、卡片、壁纸与 AI">⚙ 系统设置</button>
             </div>
           </div>
           <div class="pv-stage" id="pvStage">
@@ -857,9 +822,8 @@
             </div>
           </div>
           <p class="settings-hint pv-tip">
-            预览读取的是<strong>尚未保存</strong>的设置：在右侧改动会立即生效；点「保存设置」后前台同样生效。
-            想把预览拉通全宽，点右上排的「⚙ 收起设置」——设置面板会<strong>缩成右侧一张小卡片</strong>（不是关闭），
-            点卡片本身就能展开回来。
+            预览读取的是<strong>尚未保存</strong>的设置：在「⚙ 系统设置」里改动会立即生效；点「保存设置」后前台同样生效。
+            设置页已经独立成一页（左侧导航第 2 项），预览这边就让它一直拉通全宽。
           </p>
         </div>
 
@@ -873,7 +837,7 @@
                 <strong class="hint">分类</strong>
                 <button class="btn sm ghost" id="addCat">＋分类</button>
               </div>
-              <!-- 「常用收藏」入口开关。它跟右侧「系统设置 → 首页设置 → 分类设置」里
+              <!-- 「常用收藏」入口开关。它跟「系统设置 → 首页设置 → 分类设置」里
                    那一个是**同一个设置**（双向同步），只是放到用户真正会找的地方：
                    「常用收藏」在主页上就长在分类区的最上面，来后台找它的人看的是这块面板。 -->
               <div class="cat-fav-row">
@@ -999,7 +963,7 @@
             <div style="margin-top:10px"><button class="btn" id="writeBtn">写入选中项到导航</button></div>
             <div class="status" id="status"></div>
           </div>
-          <p class="hint" style="margin-top:8px">需先到右侧「系统设置 → AI 设置」填入免费大模型 Key；未填则使用启发式识别。</p>
+          <p class="hint" style="margin-top:8px">需先到「系统设置 → AI 设置」（左侧导航第 2 项）填入免费大模型 Key；未填则使用启发式识别。</p>
           </div>
         </div>
 
@@ -1029,21 +993,28 @@
             <div class="app-list" id="appList"><p class="hint">加载中…</p></div>
           </div>
         </div>
-      </div>
 
-      <!-- ==================== 右：系统设置 ==================== -->
-      <aside class="studio-side" id="studioSide">
-        <div class="side-head">
-          <span class="sh-title">⚙ 系统设置</span>
-          <button class="sh-close" id="sideClose" type="button"
-                  title="收起为一张小卡片（不是关闭）：卡片会留在原处、写着「点此展开」，点它即可恢复；左侧预览同时拉通全宽">
-            <span class="shc-txt">收起</span><span class="shc-x">✕</span>
-          </button>
-        </div>
+        <!-- ==================== ⚙ 系统设置（左侧导航第 2 项）====================
+             历史：这块内容曾经是 .studio 右侧一个 330~400px 的 sticky 抽屉，
+             收起时缩成一张小卡片。抽屉形态把五组设置锁在一列里，表单挤、还跟
+             预览抢宽度 —— 现在整体搬进主区，成为可铺满右侧的一页。
+             面板内部仍是「5 个标签 + 一个分组栅格」，切标签的 JS 与 id 全部沿用。 -->
+        <div class="panel settings-panel" id="settingsPanel" data-view="settings">
+          <div class="settings-head">
+            <div class="shp-title">
+              <h2>⚙ 系统设置</h2>
+              <p class="hint">改完点右侧「保存设置」写入；「首页预览」会实时跟随未保存的改动。</p>
+            </div>
+            <div class="shp-ops">
+              <span class="sf-status" id="settingsSaveStatus"></span>
+              <button class="btn ghost" id="settingsReset" type="button" title="放弃未保存的改动，重新载入当前数据">取消</button>
+              <button class="btn" id="settingsSave" type="button">保存设置</button>
+            </div>
+          </div>
 
-        <div class="side-tabs" id="sideTabs">
-          <button class="side-tab on" data-tab="home" type="button">首页设置</button>
-          <button class="side-tab" data-tab="card" type="button">卡片设置</button>
+          <div class="side-tabs" id="sideTabs">
+            <button class="side-tab on" data-tab="home" type="button">首页设置</button>
+            <button class="side-tab" data-tab="card" type="button">卡片设置</button>
           <button class="side-tab" data-tab="wall" type="button">壁纸设置</button>
           <button class="side-tab" data-tab="ai" type="button">AI 设置</button>
           <button class="side-tab" data-tab="sec" type="button">账号安全</button>
@@ -1092,7 +1063,12 @@
                 字数不限，保存链路不截断。访问者可以在公告栏右侧点「✕」临时关掉（仅本次会话）。
               </p>
 
-              <h5>主页中心模块（正文顶部大标题）</h5>
+            </div>
+
+            <!-- 主页中心模块：顶栏文字与中心文字是两套独立内容，拆成独立卡片后，
+                 宽屏两列布局不会出现「一列长到底、一列半屏空白」。 -->
+            <div class="settings-section">
+              <h4>主页中心模块</h4>
               <label class="hint">中心名称（留空则沿用站点名称）</label>
               <input type="text" id="setHeroTitle" name="site-hero-title" autocomplete="off" placeholder="留空则沿用站点名称" />
               <label class="hint">中心描述（留空则沿用站点描述）</label>
@@ -1100,8 +1076,10 @@
               <p class="settings-hint" style="margin-top:6px">
                 顶栏左上角与主页中心模块是两套独立文字：只改一边不影响另一边；留空即与顶栏保持一致。
               </p>
+            </div>
 
-              <h5>字体</h5>
+            <div class="settings-section">
+              <h4>字体与排版</h4>
               <div class="settings-row">
                 <span class="srl">全局字号</span>
                 <div class="sr-ctl">
@@ -1284,7 +1262,7 @@
             <!-- 预置壁纸：格子由 js/wallpapers.js 生成。
                  #setWallpaperValue 仍是唯一数据源，点格子 = 往它写值 +
                  同步类型与推荐的透明度 / 模糊，随后走壁纸面板既有的那条链路。 -->
-            <div class="settings-section">
+            <div class="settings-section gs-wide">
               <h4>预置壁纸</h4>
               <div class="wp-pick-head">
                 <span class="hint">当前：<b id="wallpaperCurName">未设置</b></span>
@@ -1299,7 +1277,7 @@
               </p>
             </div>
 
-            <div class="settings-section">
+            <div class="settings-section gs-wide">
               <h4>在线壁纸库</h4>
               <div class="settings-row">
                 <span class="srl">壁纸来源</span>
@@ -1390,15 +1368,8 @@
             </div>
           </section>
         </div>
-
-        <div class="side-foot">
-          <div class="sf-status" id="settingsSaveStatus"></div>
-          <div class="sf-btns">
-            <button class="btn ghost" id="settingsReset" type="button" title="放弃未保存的改动，重新载入当前数据">取消</button>
-            <button class="btn" id="settingsSave" type="button">保存设置</button>
-          </div>
         </div>
-      </aside>
+      </div>
     </div>
 
     <!-- 返回顶部：右下角浮动圆钮。样式在 css/style.css，行为在 js/totop.js（与主页共用）。
@@ -1458,9 +1429,9 @@
       } catch (e) {}
     })();
   </script>
-  <script src="js/logos.js?v=202610272028"></script>
-  <script src="js/totop.js?v=202610272028"></script>
-  <script src="js/wallpapers.js?v=202610272028"></script>
-  <script src="js/admin.js?v=202610272028"></script>
+  <script src="js/logos.js?v=202610281943"></script>
+  <script src="js/totop.js?v=202610281943"></script>
+  <script src="js/wallpapers.js?v=202610281943"></script>
+  <script src="js/admin.js?v=202610281943"></script>
 </body>
 </html>
